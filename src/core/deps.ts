@@ -1,0 +1,35 @@
+// Agregador de todas as dependências (ports) que os serviços do core
+// precisam. Uma única instância disto é construída em
+// src/composition/container.ts, escolhendo as implementações concretas
+// (Supabase, Anthropic/OpenAI/Gemini, Resend, Twilio, …) consoante as
+// variáveis de ambiente. Os serviços em core/services nunca constroem
+// clientes de infraestrutura — recebem sempre "dependencias" já resolvido.
+
+import type {
+  RepositorioConversa,
+  RepositorioBaseConhecimento,
+  RepositorioMensagem,
+  RepositorioRegistoNotificacao,
+  RepositorioPerfil,
+  RepositorioTicket,
+  RepositorioAtualizacaoTicket,
+} from "@/core/ports/repositories";
+import type { FornecedorGestaoIdentidade } from "@/core/ports/identity";
+import type { FornecedorLlm } from "@/core/ports/llm";
+import type { RemetenteEmail, RemetenteWhatsApp } from "@/core/ports/notifications";
+import type { RepositorioArmazenamento } from "@/core/ports/storage";
+
+export interface Dependencias {
+  perfis: RepositorioPerfil;
+  conversas: RepositorioConversa;
+  mensagens: RepositorioMensagem;
+  baseConhecimento: RepositorioBaseConhecimento;
+  tickets: RepositorioTicket;
+  atualizacoesTicket: RepositorioAtualizacaoTicket;
+  registoNotificacoes: RepositorioRegistoNotificacao;
+  identidade: FornecedorGestaoIdentidade;
+  llm: FornecedorLlm;
+  email: RemetenteEmail;
+  whatsapp: RemetenteWhatsApp;
+  armazenamento: RepositorioArmazenamento;
+}

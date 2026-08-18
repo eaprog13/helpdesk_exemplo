@@ -1,0 +1,244 @@
+import type { Dependencias } from "@/core/deps";
+import type { Conversa, Mensagem, ResultadoPergunta, UtilizadorAutenticado, Perfil } from "@/core/types";
+
+// Ordem de resolução de cada pergunta (regra de negócio — vive aqui, não
+// nos adaptadores de BD/LLM):
+//   1) Histórico do próprio cliente — já perguntou algo parecido antes?
+//   2) Contexto do site da Vértice — a base de conhecimento tem resposta?
+//   3) LLM — só como último recurso, e nesse caso abre-se sempre ticket.
+//
+// Os limiares abaixo são a escala do ts_rank_cd do Postgres (ou o
+// equivalente que o adaptador de BD escolhido devolver); histórico exige
+// uma correspondência mais próxima do que a KB, porque estamos a reutilizar
+// uma resposta já dada sem a rever de novo.
+const LIMIAR_RELEVANCIA_HISTORICO = 0.25;
+const MAX_RESULTADOS_HISTORICO = 3;
+const LIMIAR_RELEVANCIA_BASE_CONHECIMENTO = 0.15;
+const MAX_RESULTADOS_BASE_CONHECIMENTO = 3;
+
+export interface DadosPergunta {
+  utilizador: UtilizadorAutenticado;
+  perfil: Perfil;
+  pergunta: string;
+  idConversa?: string;
+}
+
+export class ErroAcessoNegado extends Error {}
+export class ErroNaoEncontrado extends Error {}
+
+/**
+ * Caso de uso central: o cliente faz uma pergunta.
+ * 1) Verifica se já respondemos a algo parecido no histórico do cliente.
+ * 2) Se não, procura resposta no contexto interno da Vértice (base de conhecimento).
+ * 3) Se ainda assim não houver resposta suficientemente boa, pergunta a uma LLM.
+ * 4) Sempre que se recorre à LLM, abre um ticket para os devs.
+ * 5) Notifica o cliente (email/WhatsApp) sobre o ticket criado.
+ *
+ * Função pura em termos de infraestrutura: só fala com o mundo exterior
+ * através de `dependencias` (ports). Não sabe se corre em Next.js, Express,
+ * um worker ou um teste — por isso é fácil de testar e de mover para outro
+ * framework HTTP no futuro.
+ */
+export async function fazerPergunta(dependencias: Dependencias, dados: DadosPergunta): Promise<ResultadoPergunta> {
+  const { utilizador, perfil, pergunta } = dados;
+
+  // ── 1) Obter/criar conversa ────────────────────────────────────────────
+  let conversa = dados.idConversa ? await dependencias.conversas.obterPorId(dados.idConversa) : null;
+
+  if (conversa && conversa.client_id !== utilizador.id) {
+    throw new ErroNaoEncontrado("Conversa não encontrada.");
+  }
+  if (!conversa) {
+    conversa = await dependencias.conversas.criar(utilizador.id, pergunta.slice(0, 80));
+  }
+
+  // ── 2) Histórico do próprio cliente: já perguntou algo parecido? ───────
+  // Feito ANTES de guardar a pergunta atual, para nunca se comparar consigo
+  // própria. Só considera perguntas anteriores que já têm resposta.
+  const correspondenciasHistorico = await dependencias.mensagens.pesquisarHistoricoCliente(
+    utilizador.id,
+    pergunta,
+    MAX_RESULTADOS_HISTORICO
+  );
+  const melhorCorrespondenciaHistorico = correspondenciasHistorico.find((m) => !!m.resposta) ?? null;
+  const correspondenciaHistoricoComConfianca =
+    !!melhorCorrespondenciaHistorico && melhorCorrespondenciaHistorico.relevancia >= LIMIAR_RELEVANCIA_HISTORICO;
+
+  // ── 3) Guardar a mensagem do cliente ───────────────────────────────────
+  const mensagemUtilizador = await dependencias.mensagens.criar({
+    idConversa: conversa.id,
+    papel: "user",
+    conteudo: pergunta,
+  });
+
+  let conteudoResposta: string;
+  let origem: "history" | "knowledge_base" | "llm";
+  let idReferenciaBaseConhecimento: string | null = null;
+  let ticket: ResultadoPergunta["ticket"] = null;
+  let correspondenciasBaseConhecimento: Awaited<ReturnType<Dependencias["baseConhecimento"]["pesquisar"]>> = [];
+
+  if (correspondenciaHistoricoComConfianca && melhorCorrespondenciaHistorico?.resposta) {
+    // Já respondemos a algo parecido a este cliente — reutiliza essa resposta,
+    // sem voltar a pesquisar a KB nem a chamar a LLM.
+    conteudoResposta = melhorCorrespondenciaHistorico.resposta;
+    origem = "history";
+  } else {
+    // ── 4) Contexto do site da Vértice: pesquisar a base de conhecimento ────
+    correspondenciasBaseConhecimento = await dependencias.baseConhecimento.pesquisar(
+      pergunta,
+      perfil.site_type,
+      MAX_RESULTADOS_BASE_CONHECIMENTO
+    );
+    const melhorCorrespondenciaBaseConhecimento = correspondenciasBaseConhecimento[0] ?? null;
+    const correspondenciaBaseConhecimentoComConfianca =
+      !!melhorCorrespondenciaBaseConhecimento &&
+      melhorCorrespondenciaBaseConhecimento.rank >= LIMIAR_RELEVANCIA_BASE_CONHECIMENTO;
+
+    if (correspondenciaBaseConhecimentoComConfianca && melhorCorrespondenciaBaseConhecimento) {
+      // Resposta encontrada no contexto interno — sem necessidade de LLM nem ticket.
+      conteudoResposta = melhorCorrespondenciaBaseConhecimento.content;
+      origem = "knowledge_base";
+      idReferenciaBaseConhecimento = melhorCorrespondenciaBaseConhecimento.id;
+    } else {
+      // ── 5) Sem resposta no histórico nem na KB → cai para a LLM ─────────
+      conteudoResposta = await dependencias.llm.gerarResposta({
+        pergunta,
+        contextoRelacionado: correspondenciasBaseConhecimento.map((m) => ({ titulo: m.title, conteudo: m.content })),
+        nomeEmpresa: perfil.company_name,
+        tipoSite: perfil.site_type,
+      });
+      origem = "llm";
+    }
+  }
+
+  const mensagemResposta = await dependencias.mensagens.criar({
+    idConversa: conversa.id,
+    papel: "assistant",
+    conteudo: conteudoResposta,
+    origem,
+    idReferenciaBaseConhecimento,
+  });
+
+  // ── 6) Sempre que se recorreu à LLM, abrir ticket para os devs ─────────
+  if (origem === "llm") {
+    ticket = await dependencias.tickets.criar({
+      idConversa: conversa.id,
+      idMensagem: mensagemUtilizador.id,
+      idCliente: utilizador.id,
+      titulo: pergunta.slice(0, 120),
+      pergunta,
+      respostaLlm: conteudoResposta,
+    });
+
+    // ── 7) Acompanhamento do cliente por email/WhatsApp ────────────────────
+    await notificarEventoTicket(dependencias, "ticket_created", perfil, utilizador.email, ticket);
+  }
+
+  return { idConversa: conversa.id, mensagemUtilizador, mensagemResposta, ticket };
+}
+
+/**
+ * Orquestra o envio de notificações (email sempre; WhatsApp se o cliente
+ * tiver telefone associado) e regista cada tentativa para auditoria.
+ * Partilhado entre chatService (ticket criado) e ticketService (resolvido).
+ */
+export async function notificarEventoTicket(
+  dependencias: Dependencias,
+  evento: "ticket_created" | "ticket_resolved",
+  perfil: Pick<Perfil, "id" | "full_name" | "phone">,
+  email: string,
+  ticket: NonNullable<ResultadoPergunta["ticket"]>,
+  notaResolucao?: string
+) {
+  const resultadoEmail =
+    evento === "ticket_created"
+      ? await dependencias.email.enviarTicketCriado(email, perfil.full_name, ticket)
+      : await dependencias.email.enviarTicketResolvido(email, perfil.full_name, ticket, notaResolucao ?? "");
+
+  await dependencias.registoNotificacoes.registar({
+    idCliente: perfil.id,
+    idTicket: ticket.id,
+    canal: "email",
+    evento,
+    estado: resultadoEmail.estado,
+    erro: resultadoEmail.erro,
+  });
+
+  if (perfil.phone) {
+    const resultadoWhatsApp =
+      evento === "ticket_created"
+        ? await dependencias.whatsapp.enviarTicketCriado(perfil.phone, perfil.full_name, ticket)
+        : await dependencias.whatsapp.enviarTicketResolvido(perfil.phone, perfil.full_name, ticket);
+
+    await dependencias.registoNotificacoes.registar({
+      idCliente: perfil.id,
+      idTicket: ticket.id,
+      canal: "whatsapp",
+      evento,
+      estado: resultadoWhatsApp.estado,
+      erro: resultadoWhatsApp.erro,
+    });
+  }
+}
+
+/** Carrega o histórico da conversa mais recente do cliente — usado para restaurar o chat. */
+export async function obterConversaMaisRecente(dependencias: Dependencias, idCliente: string) {
+  const conversa = await dependencias.conversas.obterMaisRecentePorCliente(idCliente);
+  if (!conversa) return { idConversa: null, mensagens: [] };
+  const mensagens = await dependencias.mensagens.listarPorConversa(conversa.id);
+  return { idConversa: conversa.id, mensagens };
+}
+
+/**
+ * Começa sempre uma conversa nova (nunca reaproveita uma existente) —
+ * chamado no momento em que o cliente inicia sessão, para que cada login
+ * arranque com uma conversa em branco. As conversas anteriores não se
+ * perdem: ficam acessíveis em "Histórico" (ver listarConversas).
+ */
+export async function iniciarNovaConversa(dependencias: Dependencias, idCliente: string): Promise<Conversa> {
+  const agora = new Date();
+  const assunto = `Conversa de ${agora.toLocaleDateString("pt-PT")} às ${agora.toLocaleTimeString("pt-PT", {
+    hour: "2-digit",
+    minute: "2-digit",
+  })}`;
+  return dependencias.conversas.criar(idCliente, assunto);
+}
+
+/**
+ * Lista as conversas de um cliente (mais recente primeiro) — para o
+ * separador de histórico. Cliente só pode listar as próprias; staff
+ * (admin/dev) tem de indicar de que cliente quer ver o histórico.
+ */
+export async function listarConversas(
+  dependencias: Dependencias,
+  perfil: Perfil,
+  idClienteAlvo?: string
+): Promise<Conversa[]> {
+  if (perfil.role === "client") {
+    return dependencias.conversas.listarPorCliente(perfil.id);
+  }
+  if (!idClienteAlvo) {
+    throw new ErroAcessoNegado("É necessário indicar de que cliente se quer ver o histórico.");
+  }
+  return dependencias.conversas.listarPorCliente(idClienteAlvo);
+}
+
+/**
+ * Mostra uma conversa específica com as suas mensagens — só consulta (as
+ * conversas do histórico não recebem novas perguntas; para continuar a
+ * falar, usa-se sempre a conversa atual, a mais recente). Cliente só pode
+ * ver as próprias conversas; staff pode ver as de qualquer cliente.
+ */
+export async function obterConversaComMensagens(
+  dependencias: Dependencias,
+  perfil: Perfil,
+  idConversa: string
+): Promise<{ conversa: Conversa; mensagens: Mensagem[] }> {
+  const conversa = await dependencias.conversas.obterPorId(idConversa);
+  if (!conversa) throw new ErroNaoEncontrado("Conversa não encontrada.");
+  if (perfil.role === "client" && conversa.client_id !== perfil.id) {
+    throw new ErroAcessoNegado("Acesso negado.");
+  }
+  const mensagens = await dependencias.mensagens.listarPorConversa(idConversa);
+  return { conversa, mensagens };
+}

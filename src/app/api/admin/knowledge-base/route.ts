@@ -1,0 +1,56 @@
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { ErroAutenticacao, exigirPapel } from "@/lib/auth/session";
+import { comCors, respostaPreflightCors } from "@/lib/security/cors";
+import { criarEntradaBaseConhecimento, listarBaseConhecimento } from "@/core/services/knowledgeBaseService";
+
+export const runtime = "nodejs";
+
+export async function OPTIONS(pedido: Request) {
+  return respostaPreflightCors(pedido);
+}
+
+export async function GET(pedido: Request) {
+  try {
+    const { dependencias } = await exigirPapel(["admin", "dev"]);
+    const entradas = await listarBaseConhecimento(dependencias);
+    return comCors(pedido, NextResponse.json({ entradas }, { status: 200 }));
+  } catch (erro) {
+    if (erro instanceof ErroAutenticacao) {
+      return comCors(pedido, NextResponse.json({ error: erro.message }, { status: erro.estado }));
+    }
+    console.error("[/api/admin/knowledge-base GET] erro:", erro);
+    return comCors(pedido, NextResponse.json({ error: "Erro ao listar a base de conhecimento." }, { status: 500 }));
+  }
+}
+
+const esquemaCriacao = z.object({
+  titulo: z.string().min(3).max(200),
+  conteudo: z.string().min(10).max(8000),
+  tipoSite: z.enum(["institutional", "ecommerce", "both"]),
+  etiquetas: z.array(z.string().min(1).max(40)).max(10).default([]),
+  publicado: z.boolean().default(true),
+});
+
+export async function POST(pedido: Request) {
+  try {
+    const { utilizador, dependencias } = await exigirPapel(["admin", "dev"]);
+    const corpo = await pedido.json();
+    const dadosValidados = esquemaCriacao.safeParse(corpo);
+    if (!dadosValidados.success) {
+      return comCors(
+        pedido,
+        NextResponse.json({ error: dadosValidados.error.errors[0]?.message }, { status: 400 })
+      );
+    }
+
+    const entrada = await criarEntradaBaseConhecimento(dependencias, utilizador.id, dadosValidados.data);
+    return comCors(pedido, NextResponse.json({ entrada }, { status: 201 }));
+  } catch (erro) {
+    if (erro instanceof ErroAutenticacao) {
+      return comCors(pedido, NextResponse.json({ error: erro.message }, { status: erro.estado }));
+    }
+    console.error("[/api/admin/knowledge-base POST] erro:", erro);
+    return comCors(pedido, NextResponse.json({ error: "Erro ao criar entrada." }, { status: 500 }));
+  }
+}
