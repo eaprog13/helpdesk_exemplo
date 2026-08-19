@@ -13,6 +13,7 @@ import type {
   RepositorioPerfil,
   RepositorioTicket,
   RepositorioAtualizacaoTicket,
+  RepositorioAnexoTicket,
 } from "@/core/ports/repositories";
 import type { FornecedorGestaoIdentidade } from "@/core/ports/identity";
 import type { FornecedorLlm } from "@/core/ports/llm";
@@ -26,6 +27,7 @@ export interface Dependencias {
   baseConhecimento: RepositorioBaseConhecimento;
   tickets: RepositorioTicket;
   atualizacoesTicket: RepositorioAtualizacaoTicket;
+  anexosTicket: RepositorioAnexoTicket;
   registoNotificacoes: RepositorioRegistoNotificacao;
   identidade: FornecedorGestaoIdentidade;
   llm: FornecedorLlm;

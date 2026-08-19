@@ -8,8 +8,8 @@ export default async function PaginaDetalheTicketAdmin({ params }: { params: Pro
   const { perfil, dependencias } = await exigirPapel(["admin", "dev"]);
 
   try {
-    const { ticket, atualizacoes } = await obterTicketComAtualizacoes(dependencias, perfil, id);
-    return <PainelDetalheTicket ticket={ticket} atualizacoes={atualizacoes} />;
+    const { ticket, atualizacoes, anexos } = await obterTicketComAtualizacoes(dependencias, perfil, id);
+    return <PainelDetalheTicket ticket={ticket} atualizacoes={atualizacoes} anexos={anexos} />;
   } catch (erro) {
     if (erro instanceof ErroNaoEncontrado || erro instanceof ErroAcessoNegado) notFound();
     throw erro;

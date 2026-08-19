@@ -92,6 +92,22 @@ export interface AtualizacaoTicket {
   created_at: string;
 }
 
+export interface AnexoTicket {
+  id: string;
+  ticket_id: string;
+  uploaded_by: string;
+  file_path: string;
+  file_name: string;
+  content_type: string;
+  size_bytes: number;
+  created_at: string;
+}
+
+/** Anexo de ticket já com URL temporário (assinado) para mostrar/descarregar — gerado a pedido, nunca guardado. */
+export interface AnexoTicketComUrl extends AnexoTicket {
+  url: string;
+}
+
 /** Utilizador já autenticado — resolvido pela camada web a partir do pedido HTTP. */
 export interface UtilizadorAutenticado {
   id: string;

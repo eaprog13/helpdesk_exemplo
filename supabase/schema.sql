@@ -164,6 +164,36 @@ create table if not exists public.ticket_updates (
 
 create index if not exists ticket_updates_ticket_idx on public.ticket_updates (ticket_id);
 
+-- ── Anexos de um ticket (capturas de ecrã/ficheiros para ajudar o dev) ──
+-- O cliente pode anexar logo quando o ticket é aberto (ver AvisoTicket no
+-- chat) ou mais tarde, a partir do detalhe do pedido — vários ficheiros por
+-- ticket, ao contrário do logótipo do cliente que é um só por empresa.
+create table if not exists public.ticket_attachments (
+  id           uuid primary key default gen_random_uuid(),
+  ticket_id    uuid not null references public.tickets (id) on delete cascade,
+  uploaded_by  uuid not null references public.profiles (id),
+  file_path    text not null,      -- caminho no bucket "ticket-attachments"
+  file_name    text not null,      -- nome original do ficheiro, para mostrar na UI
+  content_type text not null,
+  size_bytes   integer not null,
+  created_at   timestamptz not null default now()
+);
+
+create index if not exists ticket_attachments_ticket_idx on public.ticket_attachments (ticket_id);
+
+-- Storage: bucket privado para anexos de tickets. Ao contrário do bucket
+-- "logos" (público), este é privado — pode conter capturas de ecrã com
+-- dados do cliente — e só é acedido através da API (chave service_role),
+-- que gera um URL assinado e temporário para mostrar/descarregar cada
+-- ficheiro (ver RepositorioArmazenamento.obterUrlAnexoTicket).
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('ticket-attachments', 'ticket-attachments', false, 5242880,
+  array['image/png', 'image/jpeg', 'image/webp', 'application/pdf'])
+on conflict (id) do update set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+
 -- ── Registo de notificações enviadas (email / whatsapp) ────────────────
 create table if not exists public.notifications_log (
   id          uuid primary key default gen_random_uuid(),

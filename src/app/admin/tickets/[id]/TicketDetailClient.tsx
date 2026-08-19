@@ -5,16 +5,19 @@ import { useRouter } from "next/navigation";
 import { Cartao } from "@/components/ui/Card";
 import { Distintivo } from "@/components/ui/Badge";
 import { Botao } from "@/components/ui/Button";
-import type { Ticket, EstadoTicket, AtualizacaoTicket } from "@/core/types";
+import { ListaAnexosTicket } from "@/components/ticket/AttachmentsList";
+import type { Ticket, EstadoTicket, AtualizacaoTicket, AnexoTicketComUrl } from "@/core/types";
 
 const OPCOES_ESTADO: EstadoTicket[] = ["open", "in_progress", "resolved", "closed"];
 
 export function PainelDetalheTicket({
   ticket,
   atualizacoes,
+  anexos,
 }: {
   ticket: Ticket;
   atualizacoes: AtualizacaoTicket[];
+  anexos: AnexoTicketComUrl[];
 }) {
   const router = useRouter();
   const [estado, setEstado] = useState<EstadoTicket>(ticket.status);
@@ -65,6 +68,15 @@ export function PainelDetalheTicket({
             <p className="text-sm text-ink-400">{ticket.llm_answer}</p>
           </>
         )}
+      </Cartao>
+
+      <Cartao className="mb-4 p-4">
+        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-300">Anexos</p>
+        <ListaAnexosTicket
+          idTicket={ticket.id}
+          anexosIniciais={anexos}
+          legenda={anexos.length === 0 ? "O cliente ainda não anexou nenhum ficheiro." : undefined}
+        />
       </Cartao>
 
       <Cartao className="mb-4 p-4">

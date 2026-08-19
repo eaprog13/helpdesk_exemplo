@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Ticket } from "@/core/types";
+import { ListaAnexosTicket } from "@/components/ticket/AttachmentsList";
 
 export function AvisoTicket({ ticket }: { ticket: Ticket }) {
   return (
@@ -10,7 +11,16 @@ export function AvisoTicket({ ticket }: { ticket: Ticket }) {
         ticket <strong>#{ticket.id.slice(0, 8)}</strong>. Vai receber uma atualização por email
         {ticket.id ? " (e WhatsApp, se tiver contacto associado)" : ""} assim que for analisado.
       </p>
-      <Link href={`/tickets/${ticket.id}`} className="mt-1.5 inline-block text-accent-hover underline">
+
+      <div className="mt-2.5 border-t border-accent/20 pt-2.5">
+        <ListaAnexosTicket
+          idTicket={ticket.id}
+          anexosIniciais={[]}
+          legenda="Se ajudar, pode anexar uma captura de ecrã do problema — facilita o trabalho de quem for analisar o seu pedido."
+        />
+      </div>
+
+      <Link href={`/tickets/${ticket.id}`} className="mt-2 inline-block text-accent-hover underline">
         Acompanhar este pedido
       </Link>
     </div>

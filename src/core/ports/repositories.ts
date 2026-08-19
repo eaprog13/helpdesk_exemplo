@@ -16,6 +16,7 @@ import type {
   PrioridadeTicket,
   EstadoTicket,
   AtualizacaoTicket,
+  AnexoTicket,
   CanalNotificacao,
   EventoNotificacao,
   EstadoNotificacao,
@@ -129,6 +130,18 @@ export interface RepositorioAtualizacaoTicket {
     visivelParaCliente: boolean;
   }): Promise<AtualizacaoTicket>;
   listarPorTicket(idTicket: string, opcoes?: { apenasVisivelParaCliente?: boolean }): Promise<AtualizacaoTicket[]>;
+}
+
+export interface RepositorioAnexoTicket {
+  criar(dados: {
+    idTicket: string;
+    idUtilizador: string;
+    caminhoFicheiro: string;
+    nomeFicheiro: string;
+    tipoConteudo: string;
+    tamanhoBytes: number;
+  }): Promise<AnexoTicket>;
+  listarPorTicket(idTicket: string): Promise<AnexoTicket[]>;
 }
 
 export interface RepositorioRegistoNotificacao {

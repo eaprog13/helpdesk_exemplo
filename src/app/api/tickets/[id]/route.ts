@@ -19,8 +19,8 @@ export async function GET(pedido: Request, { params }: { params: Promise<{ id: s
   try {
     const { id } = await params;
     const { perfil, dependencias } = await exigirUtilizador();
-    const { ticket, atualizacoes } = await obterTicketComAtualizacoes(dependencias, perfil, id);
-    return comCors(pedido, NextResponse.json({ ticket, atualizacoes }, { status: 200 }));
+    const { ticket, atualizacoes, anexos } = await obterTicketComAtualizacoes(dependencias, perfil, id);
+    return comCors(pedido, NextResponse.json({ ticket, atualizacoes, anexos }, { status: 200 }));
   } catch (erro) {
     if (erro instanceof ErroAutenticacao) {
       return comCors(pedido, NextResponse.json({ error: erro.message }, { status: erro.estado }));

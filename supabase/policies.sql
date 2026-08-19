@@ -7,9 +7,10 @@ alter table public.profiles          enable row level security;
 alter table public.knowledge_base    enable row level security;
 alter table public.conversations     enable row level security;
 alter table public.messages          enable row level security;
-alter table public.tickets           enable row level security;
-alter table public.ticket_updates    enable row level security;
-alter table public.notifications_log enable row level security;
+alter table public.tickets            enable row level security;
+alter table public.ticket_updates     enable row level security;
+alter table public.ticket_attachments enable row level security;
+alter table public.notifications_log  enable row level security;
 
 -- Função auxiliar: papel do utilizador autenticado
 create or replace function public.current_role_is(roles text[])
@@ -116,6 +117,30 @@ create policy "ticket_updates: staff vê e gere todas"
   using (public.current_role_is(array['admin', 'dev']))
   with check (public.current_role_is(array['admin', 'dev']));
 
+-- ── ticket_attachments ─────────────────────────────────────────────────
+create policy "ticket_attachments: cliente vê anexos dos seus tickets"
+  on public.ticket_attachments for select
+  using (
+    exists (
+      select 1 from public.tickets t
+      where t.id = ticket_id and t.client_id = auth.uid()
+    )
+  );
+
+create policy "ticket_attachments: cliente anexa aos seus tickets"
+  on public.ticket_attachments for insert
+  with check (
+    exists (
+      select 1 from public.tickets t
+      where t.id = ticket_id and t.client_id = auth.uid()
+    )
+  );
+
+create policy "ticket_attachments: staff vê e gere todos"
+  on public.ticket_attachments for all
+  using (public.current_role_is(array['admin', 'dev']))
+  with check (public.current_role_is(array['admin', 'dev']));
+
 -- ── notifications_log ──────────────────────────────────────────────────
 create policy "notifications_log: staff vê tudo"
   on public.notifications_log for select
@@ -130,6 +155,16 @@ create policy "logos: staff gere os ficheiros"
   on storage.objects for all
   using (bucket_id = 'logos' and public.current_role_is(array['admin', 'dev']))
   with check (bucket_id = 'logos' and public.current_role_is(array['admin', 'dev']));
+
+-- ── storage.objects (bucket "ticket-attachments") ───────────────────────
+-- Privado. O cliente nunca fala diretamente com este bucket — carrega e lê
+-- anexos sempre através da API (servidor, chave service_role, que valida
+-- primeiro que o ticket é dele ou que é staff). Esta policy só cobre o
+-- caso de, no futuro, staff aceder ao bucket diretamente a partir do browser.
+create policy "ticket-attachments: staff gere os ficheiros"
+  on storage.objects for all
+  using (bucket_id = 'ticket-attachments' and public.current_role_is(array['admin', 'dev']))
+  with check (bucket_id = 'ticket-attachments' and public.current_role_is(array['admin', 'dev']));
 
 -- Nota: as rotas de API sensíveis (criação de clientes, envio de emails/whatsapp,
 -- chamadas à LLM, upload de logótipos) usam a service_role key exclusivamente
