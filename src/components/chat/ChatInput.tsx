@@ -10,6 +10,27 @@ interface PropriedadesCampoChat {
   desativado?: boolean;
 }
 
+// Mensagens por código de erro do SpeechRecognition — a mensagem genérica
+// "verifique as permissões" só fazia sentido para "not-allowed"/
+// "permission-denied"; para todos os outros códigos (o mais comum sendo
+// "network", quando o browser não consegue contactar o serviço de
+// reconhecimento) induzia em erro quem já tinha dado a permissão.
+const MENSAGENS_ERRO_DITADO: Record<string, string> = {
+  "not-allowed": "Permissão de microfone recusada. Ative-a nas definições do site, no browser.",
+  "permission-denied": "Permissão de microfone recusada. Ative-a nas definições do site, no browser.",
+  "service-not-allowed":
+    "O serviço de ditado deste browser recusou o pedido (comum em builds do Chromium sem acesso ao serviço da Google, ou fora de HTTPS/localhost).",
+  network:
+    "Sem ligação ao serviço de reconhecimento de voz do browser (precisa de internet). Tente novamente ou escreva a pergunta.",
+  "audio-capture": "Não foi encontrado nenhum microfone. Verifique se está ligado e não está a ser usado noutro sítio.",
+  "no-speech": "Não foi detetada nenhuma fala. Tente falar mais perto do microfone.",
+  aborted: "Ditado interrompido.",
+};
+
+function mensagemErroDitado(codigo: string): string {
+  return MENSAGENS_ERRO_DITADO[codigo] ?? `Não foi possível usar o microfone (erro: ${codigo}).`;
+}
+
 /**
  * Input estilo ChatGPT: textarea de altura automática, fixo no fundo da
  * janela de chat, Enter para enviar e Shift+Enter para nova linha, e um
@@ -70,15 +91,25 @@ export function CampoChat({ valor, aoAlterar, aoSubmeter, desativado }: Propried
       }
       aoAlterar(`${prefixo}${transcricaoConfirmada}${parcial}`);
     };
-    reconhecimento.onerror = () => {
-      setErroDitado("Não foi possível usar o microfone. Verifique as permissões do browser.");
+    reconhecimento.onerror = (evento) => {
+      // "aborted" acontece sempre que se chama stop() de propósito (ex.: o
+      // próprio botão "parar ditado") — não é um erro real, não mostrar nada.
+      if (evento.error !== "aborted") {
+        console.error("[ditado por voz] SpeechRecognition error:", evento.error);
+        setErroDitado(mensagemErroDitado(evento.error));
+      }
       setAOuvir(false);
     };
     reconhecimento.onend = () => setAOuvir(false);
 
     refReconhecimento.current = reconhecimento;
-    reconhecimento.start();
-    setAOuvir(true);
+    try {
+      reconhecimento.start();
+      setAOuvir(true);
+    } catch (erro) {
+      console.error("[ditado por voz] não foi possível iniciar:", erro);
+      setErroDitado("Não foi possível iniciar o ditado. Tente novamente.");
+    }
   }
 
   function aoEscrever(e: React.ChangeEvent<HTMLTextAreaElement>) {
