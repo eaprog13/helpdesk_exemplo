@@ -4,12 +4,13 @@ import { ErroAcessoNegado, ErroNaoEncontrado, obterTicketComAtualizacoes } from 
 import { Cartao } from "@/components/ui/Card";
 import { Distintivo } from "@/components/ui/Badge";
 
-export default async function PaginaDetalhePedidoCliente({ params }: { params: { id: string } }) {
+export default async function PaginaDetalhePedidoCliente({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const { perfil, dependencias } = await exigirUtilizador();
 
   let resultado;
   try {
-    resultado = await obterTicketComAtualizacoes(dependencias, perfil, params.id);
+    resultado = await obterTicketComAtualizacoes(dependencias, perfil, id);
   } catch (erro) {
     if (erro instanceof ErroNaoEncontrado || erro instanceof ErroAcessoNegado) notFound();
     throw erro;

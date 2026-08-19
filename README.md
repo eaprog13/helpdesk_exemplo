@@ -152,6 +152,28 @@ Next.js é usado nos mesmos pontos:
 > ```
 > (`schema.sql` continua seguro de correr do zero num projeto novo.)
 
+> **Se já tinha corrido `schema.sql`/o seed antes de 2026-08-19**, correr
+> também [`supabase/migration_flexibilidade_pesquisa.sql`](supabase/migration_flexibilidade_pesquisa.sql)
+> uma vez no SQL Editor: torna a pesquisa (histórico e base de conhecimento)
+> tolerante a perguntas com mais palavras — antes, `plainto_tsquery` exigia
+> que TODAS as palavras da pergunta aparecessem no documento, pelo que
+> perguntas mais longas/naturais (ex.: "prazo de entrega de projeto")
+> podiam falhar onde a versão curta ("projeto entrega") resultava — e
+> remove 11 entradas duplicadas da Base de Conhecimento deixadas por um
+> seed corrido duas vezes. (`schema.sql`/`seed_knowledge_base_institucional.sql`
+> já incluem a correção para instalações novas.)
+
+> **Se já tinha corrido `migration_flexibilidade_pesquisa.sql`**, correr
+> também [`supabase/migration_corrigir_double_stemming.sql`](supabase/migration_corrigir_double_stemming.sql):
+> aquela migração convertia o AND de `plainto_tsquery` em OR manipulando o
+> *texto* do tsquery já processado — mas `to_tsquery` volta a aplicar o
+> dicionário 'portuguese' a esse texto, o que "re-stemma" lexemas já
+> stemmed (ex.: "problema" → `problem` → `probl` na 2ª passagem), fazendo
+> certas palavras (comprovado: "problema") não devolverem nenhum resultado
+> mesmo estando literalmente no título de vários artigos. A correção
+> stemma cada palavra uma única vez e combina os resultados como valores
+> `tsquery`, nunca como texto. (`schema.sql` já inclui a correção.)
+
 ### 2. Variáveis de ambiente
 
 ```bash
@@ -201,4 +223,11 @@ Abrir [http://localhost:3000](http://localhost:3000).
   para uma experiência mais próxima do ChatGPT token-a-token.
 - Popular `knowledge_base` com o conteúdo real dos procedimentos da Vértice
   é o que determina a qualidade das respostas automáticas e reduz o volume
-  de tickets abertos para os devs.
+  de tickets abertos para os devs. Dois seeds prontos a correr no SQL
+  Editor: [`supabase/seed_knowledge_base_institucional.sql`](supabase/seed_knowledge_base_institucional.sql)
+  (factos do site/marketing) e
+  [`supabase/seed_knowledge_base_operacional.sql`](supabase/seed_knowledge_base_operacional.sql)
+  (dia a dia do cliente já em produção: pagamentos, acessos, site em
+  baixo, alterações, funcionalidades novas, atualizações). Este segundo
+  inclui algumas entradas `[REVER]` por publicar — rever e confirmar em
+  `/admin/knowledge-base` antes de as ativar.

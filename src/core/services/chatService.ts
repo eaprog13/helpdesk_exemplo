@@ -11,9 +11,25 @@ import type { Conversa, Mensagem, ResultadoPergunta, UtilizadorAutenticado, Perf
 // equivalente que o adaptador de BD escolhido devolver); histórico exige
 // uma correspondência mais próxima do que a KB, porque estamos a reutilizar
 // uma resposta já dada sem a rever de novo.
-const LIMIAR_RELEVANCIA_HISTORICO = 0.25;
+//
+// Recalibrados a 2026-08-19, depois de search_knowledge_base/
+// search_client_history passarem a devolver rank × cobertura (ver
+// supabase/migration_flexibilidade_pesquisa.sql, v2) — testados
+// diretamente ao RPC com um conjunto de perguntas reais e adversariais:
+//   • correspondências genuínas (tópico 1:1 com um artigo): rank 0.6–0.83
+//     (ex.: "loja online" → 0.83; "prazo de entrega de projeto" → 0.75)
+//   • correspondências parciais/ambíguas (só partilham uma categoria
+//     genérica, ex. "site institucional", sem a KB ter resposta real à
+//     pergunta): rank ~0.3–0.35 — devem continuar a cair para a LLM
+//   • coincidências sem relação nenhuma (ex. perguntas sobre Bitcoin, CEO,
+//     estacionamento — só correspondem por "Vértice Digital" aparecer no
+//     título de quase todos os artigos): rank ~0.07–0.46, nunca acima
+// 0.5 fica acima de toda a coincidência observada e abaixo de toda a
+// correspondência genuína testada — reavaliar se a KB crescer muito ou se
+// aparecerem falsos positivos/negativos reais em produção.
+const LIMIAR_RELEVANCIA_HISTORICO = 0.55;
 const MAX_RESULTADOS_HISTORICO = 3;
-const LIMIAR_RELEVANCIA_BASE_CONHECIMENTO = 0.15;
+const LIMIAR_RELEVANCIA_BASE_CONHECIMENTO = 0.5;
 const MAX_RESULTADOS_BASE_CONHECIMENTO = 3;
 
 export interface DadosPergunta {

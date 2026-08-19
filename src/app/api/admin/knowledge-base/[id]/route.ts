@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { ErroAutenticacao, exigirPapel } from "@/lib/auth/session";
 import { comCors, respostaPreflightCors } from "@/lib/security/cors";
-import { apagarEntradaBaseConhecimento, atualizarEntradaBaseConhecimento } from "@/core/services/knowledgeBaseService";
+import {
+  TituloDuplicadoError,
+  apagarEntradaBaseConhecimento,
+  atualizarEntradaBaseConhecimento,
+} from "@/core/services/knowledgeBaseService";
 
 export const runtime = "nodejs";
 
@@ -39,6 +43,9 @@ export async function PATCH(pedido: Request, { params }: { params: Promise<{ id:
   } catch (erro) {
     if (erro instanceof ErroAutenticacao) {
       return comCors(pedido, NextResponse.json({ error: erro.message }, { status: erro.estado }));
+    }
+    if (erro instanceof TituloDuplicadoError) {
+      return comCors(pedido, NextResponse.json({ error: erro.message }, { status: 409 }));
     }
     console.error("[/api/admin/knowledge-base/:id PATCH] erro:", erro);
     return comCors(pedido, NextResponse.json({ error: "Erro ao atualizar entrada." }, { status: 500 }));

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { ErroAutenticacao, exigirPapel } from "@/lib/auth/session";
 import { comCors, respostaPreflightCors } from "@/lib/security/cors";
-import { criarEntradaBaseConhecimento, listarBaseConhecimento } from "@/core/services/knowledgeBaseService";
+import { TituloDuplicadoError, criarEntradaBaseConhecimento, listarBaseConhecimento } from "@/core/services/knowledgeBaseService";
 
 export const runtime = "nodejs";
 
@@ -49,6 +49,9 @@ export async function POST(pedido: Request) {
   } catch (erro) {
     if (erro instanceof ErroAutenticacao) {
       return comCors(pedido, NextResponse.json({ error: erro.message }, { status: erro.estado }));
+    }
+    if (erro instanceof TituloDuplicadoError) {
+      return comCors(pedido, NextResponse.json({ error: erro.message }, { status: 409 }));
     }
     console.error("[/api/admin/knowledge-base POST] erro:", erro);
     return comCors(pedido, NextResponse.json({ error: "Erro ao criar entrada." }, { status: 500 }));

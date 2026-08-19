@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CorrespondenciaBaseConhecimento, RepositorioBaseConhecimento } from "@/core/ports/repositories";
 import type { EntradaBaseConhecimento, TipoSite } from "@/core/types";
+import { TituloDuplicadoError } from "@/core/services/knowledgeBaseService";
 
 /**
  * Pesquisa full-text (Postgres tsvector, dicionário "portuguese") na base de
@@ -49,6 +50,9 @@ export class RepositorioBaseConhecimentoSupabase implements RepositorioBaseConhe
       })
       .select("*")
       .single();
+    if (error?.code === "23505") {
+      throw new TituloDuplicadoError(`Já existe uma entrada da Base de Conhecimento com o título "${entrada.titulo}".`);
+    }
     if (error || !data) throw new Error(`[baseConhecimento.criar] ${error?.message}`);
     return data;
   }
@@ -70,6 +74,9 @@ export class RepositorioBaseConhecimentoSupabase implements RepositorioBaseConhe
       .eq("id", id)
       .select("*")
       .maybeSingle();
+    if (error?.code === "23505") {
+      throw new TituloDuplicadoError(`Já existe uma entrada da Base de Conhecimento com o título "${alteracoes.titulo}".`);
+    }
     if (error) throw new Error(`[baseConhecimento.atualizar] ${error.message}`);
     return data;
   }

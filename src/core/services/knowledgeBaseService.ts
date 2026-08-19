@@ -1,6 +1,9 @@
 import type { Dependencias } from "@/core/deps";
 import type { TipoSite } from "@/core/types";
 
+/** Já existe uma entrada da Base de Conhecimento com este título (índice único em `title`). */
+export class TituloDuplicadoError extends Error {}
+
 export async function listarBaseConhecimento(dependencias: Dependencias) {
   return dependencias.baseConhecimento.listar();
 }

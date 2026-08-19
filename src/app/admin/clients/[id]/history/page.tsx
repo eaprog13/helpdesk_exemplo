@@ -4,12 +4,13 @@ import { exigirPapel } from "@/lib/auth/session";
 import { listarConversas } from "@/core/services/chatService";
 import { Cartao } from "@/components/ui/Card";
 
-export default async function PaginaHistoricoClienteAdmin({ params }: { params: { id: string } }) {
+export default async function PaginaHistoricoClienteAdmin({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const { perfil, dependencias } = await exigirPapel(["admin", "dev"]);
 
   const [cliente, conversas] = await Promise.all([
-    dependencias.perfis.obterPorId(params.id),
-    listarConversas(dependencias, perfil, params.id),
+    dependencias.perfis.obterPorId(id),
+    listarConversas(dependencias, perfil, id),
   ]);
 
   if (!cliente) notFound();
@@ -31,7 +32,7 @@ export default async function PaginaHistoricoClienteAdmin({ params }: { params: 
 
       <div className="space-y-3">
         {conversas.map((conversa, i) => (
-          <Link key={conversa.id} href={`/admin/clients/${params.id}/history/${conversa.id}`} className="block">
+          <Link key={conversa.id} href={`/admin/clients/${id}/history/${conversa.id}`} className="block">
             <Cartao
               className="animate-entrada p-4 transition-[box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-md"
               style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}

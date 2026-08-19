@@ -98,7 +98,7 @@ insert into public.knowledge_base (title, content, site_type, tags, is_published
   'both',
   array['rgpd', 'privacidade', 'dados-pessoais', 'protecao-de-dados', 'formulario-de-contacto', 'gdpr'],
   true
-);
+) on conflict (title) do nothing;
 
 -- ── 2) Contextos de suporte sugeridos (rever antes de publicar) ────────
 -- Conteúdo assumido/genérico, não confirmado pela Vértice Digital. Rever os
@@ -181,4 +181,4 @@ insert into public.knowledge_base (title, content, site_type, tags, is_published
   'both',
   array['institucional', 'ecommerce', 'migracao'],
   false
-);
+) on conflict (title) do nothing;

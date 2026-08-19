@@ -96,6 +96,12 @@ create table if not exists public.knowledge_base (
 
 create index if not exists knowledge_base_search_idx on public.knowledge_base using gin (search_vector);
 create index if not exists knowledge_base_site_type_idx on public.knowledge_base (site_type);
+-- Evita duplicados silenciosos ao correr um ficheiro de seed mais do que
+-- uma vez (foi o que aconteceu com seed_knowledge_base_institucional.sql,
+-- criando 11 entradas repetidas que inflacionavam artificialmente o
+-- ranking da pesquisa) — os "insert" do seed usam "on conflict (title) do
+-- nothing", que depende deste índice único.
+create unique index if not exists knowledge_base_title_idx on public.knowledge_base (title);
 
 -- ── Conversas ──────────────────────────────────────────────────────────
 create table if not exists public.conversations (
@@ -172,9 +178,88 @@ create table if not exists public.notifications_log (
 
 create index if not exists notifications_log_client_idx on public.notifications_log (client_id);
 
+-- ── Funções auxiliares de pesquisa (histórico + KB) ────────────────────
+-- Constroem um tsquery em OR a partir da pergunta do cliente SEM nunca
+-- reprocessar texto já stemmed pelo dicionário 'portuguese' — uma
+-- tentativa anterior fazia isso (manipular o TEXTO de plainto_tsquery,
+-- trocar " & " por " | " e voltar a fazer parse com to_tsquery), e
+-- to_tsquery aplica o dicionário a TUDO o que recebe, mesmo a lexemas já
+-- entre aspas — não os trata como texto literal. Isso "re-stemma" um
+-- lexema que já tinha sido stemmed uma vez, o que para a maioria das
+-- palavras dá o mesmo resultado (stemming idempotente) mas NEM SEMPRE:
+-- plainto_tsquery('portuguese','problema') dá 'problem'; stemmar 'problem'
+-- outra vez dá 'probl' — um lexema diferente, que deixa de bater certo
+-- com o que está guardado. Resultado real observado: pesquisar só por
+-- "problema" não devolvia NADA, mesmo com vários artigos a conterem essa
+-- palavra no título.
+--
+-- Correção: cada palavra da pergunta passa pelo dicionário UMA ÚNICA VEZ
+-- (tsquery_termos, abaixo) e os resultados combinam-se como valores
+-- tsquery — nunca como texto — com o operador nativo `||` (OR).
+create or replace function public.tsquery_termos(query_text text)
+returns setof tsquery
+language plpgsql
+stable
+as $$
+declare
+  palavra text;
+  termo tsquery;
+begin
+  for palavra in
+    select unnest(regexp_split_to_array(trim(coalesce(query_text, '')), '\s+'))
+  loop
+    if palavra = '' then
+      continue;
+    end if;
+    termo := plainto_tsquery('portuguese', palavra);
+    if termo is not null and termo::text <> '' then
+      return next termo;
+    end if;
+  end loop;
+  return;
+end;
+$$;
+
+-- Agregado auxiliar: combina vários tsquery com OR (o Postgres não tem um
+-- equivalente nativo a string_agg para tsquery).
+create or replace function public.tsquery_or_sfunc(estado tsquery, elemento tsquery)
+returns tsquery
+language sql
+immutable
+as $$
+  select case
+    when estado is null then elemento
+    when elemento is null then estado
+    else estado || elemento
+  end;
+$$;
+
+drop aggregate if exists public.tsquery_or_agg(tsquery);
+create aggregate public.tsquery_or_agg (tsquery) (
+  sfunc = public.tsquery_or_sfunc,
+  stype = tsquery
+);
+
 -- ── Função de pesquisa full-text na Base de Conhecimento ───────────────
 -- Chamada via supabase.rpc('search_knowledge_base', ...) a partir da app.
 -- security invoker (default) respeita RLS de knowledge_base do chamador.
+--
+-- Nota sobre flexibilidade: mais palavras na pergunta nunca eliminam
+-- resultados válidos (ver tsquery_termos/tsquery_or_agg acima — a
+-- correspondência é OR, não AND), só continuam a poder ordená-los melhor.
+--
+-- Isto sozinho, porém, cria um problema de precisão: "Vértice Digital"
+-- aparece no título (peso A, o mais alto) de quase todos os artigos, por
+-- isso QUALQUER pergunta que mencione o nome da empresa "correspondia" com
+-- rank alto a artigos completamente errados (testado: "a Vértice Digital
+-- tem certificado SSL" respondia com "Como contactar a Vértice Digital",
+-- rank 0.78 — mais alto do que vários acertos reais). Sem LLM como rede de
+-- segurança, isto devolveria respostas erradas com "confiança" alta. Por
+-- isso o rank final não é só ts_rank_cd — multiplica-se pela COBERTURA
+-- (fração das palavras distintas da pergunta que o artigo realmente
+-- contém): um artigo que só partilha "Vértice Digital" cobre 2 de 5
+-- palavras (0.4×) e cai bastante; um artigo que cobre a pergunta quase
+-- toda mantém o rank alto.
 create or replace function public.search_knowledge_base(
   query_text text,
   filter_site_type text default null,
@@ -195,14 +280,33 @@ returns table (
 language sql
 stable
 as $$
+  with consulta as (
+    select
+      public.tsquery_or_agg(t) as consulta_or,
+      array_agg(t) as termos
+    from public.tsquery_termos(query_text) as t
+  ),
+  candidatos as (
+    select
+      kb.id, kb.title, kb.content, kb.site_type, kb.tags, kb.is_published,
+      kb.created_by, kb.created_at, kb.updated_at,
+      ts_rank_cd(kb.search_vector, consulta.consulta_or, 32) as rank_bruto,
+      consulta.termos,
+      kb.search_vector
+    from public.knowledge_base kb, consulta
+    where kb.is_published = true
+      and (filter_site_type is null or kb.site_type = filter_site_type or kb.site_type = 'both')
+      and consulta.consulta_or is not null
+      and kb.search_vector @@ consulta.consulta_or
+  )
   select
-    kb.id, kb.title, kb.content, kb.site_type, kb.tags, kb.is_published,
-    kb.created_by, kb.created_at, kb.updated_at,
-    ts_rank_cd(kb.search_vector, plainto_tsquery('portuguese', query_text)) as rank
-  from public.knowledge_base kb
-  where kb.is_published = true
-    and (filter_site_type is null or kb.site_type = filter_site_type or kb.site_type = 'both')
-    and kb.search_vector @@ plainto_tsquery('portuguese', query_text)
+    c.id, c.title, c.content, c.site_type, c.tags, c.is_published,
+    c.created_by, c.created_at, c.updated_at,
+    (
+      (select count(*) from unnest(c.termos) t where c.search_vector @@ t)::real
+      / greatest(array_length(c.termos, 1), 1)
+    ) * c.rank_bruto as rank
+  from candidatos c
   order by rank desc
   limit max_results;
 $$;
@@ -228,25 +332,51 @@ returns table (
 language sql
 stable
 as $$
+  with consulta as (
+    -- Ver comentário em search_knowledge_base acima: mesma construção do
+    -- OR palavra-a-palavra (flexibilidade, sem re-stemmar) e a mesma
+    -- correção de precisão por cobertura — esta é a camada de MAIOR
+    -- confiança de todas (reutiliza uma resposta sem a rever de novo).
+    select
+      public.tsquery_or_agg(t) as consulta_or,
+      array_agg(t) as termos
+    from public.tsquery_termos(query_text) as t
+  ),
+  candidatos as (
+    select
+      m.id as question_id,
+      m.content as question,
+      m.conversation_id,
+      m.created_at,
+      ts_rank_cd(to_tsvector('portuguese', m.content), consulta.consulta_or, 32) as rank_bruto,
+      consulta.termos,
+      to_tsvector('portuguese', m.content) as vetor
+    from public.messages m
+    join public.conversations c on c.id = m.conversation_id
+    cross join consulta
+    where c.client_id = p_client_id
+      and m.role = 'user'
+      and consulta.consulta_or is not null
+      and to_tsvector('portuguese', m.content) @@ consulta.consulta_or
+  )
   select
-    m.id as question_id,
-    m.content as question,
+    cd.question_id,
+    cd.question,
     (
       select mm.content
       from public.messages mm
-      where mm.conversation_id = m.conversation_id
+      where mm.conversation_id = cd.conversation_id
         and mm.role = 'assistant'
-        and mm.created_at > m.created_at
+        and mm.created_at > cd.created_at
       order by mm.created_at asc
       limit 1
     ) as answer,
-    m.conversation_id,
-    ts_rank_cd(to_tsvector('portuguese', m.content), plainto_tsquery('portuguese', query_text)) as rank
-  from public.messages m
-  join public.conversations c on c.id = m.conversation_id
-  where c.client_id = p_client_id
-    and m.role = 'user'
-    and to_tsvector('portuguese', m.content) @@ plainto_tsquery('portuguese', query_text)
+    cd.conversation_id,
+    (
+      (select count(*) from unnest(cd.termos) t where cd.vetor @@ t)::real
+      / greatest(array_length(cd.termos, 1), 1)
+    ) * cd.rank_bruto as rank
+  from candidatos cd
   order by rank desc
   limit max_results;
 $$;
