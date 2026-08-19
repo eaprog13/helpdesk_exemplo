@@ -24,7 +24,7 @@ export class ErroAutenticacao extends Error {
 }
 
 export async function exigirUtilizador() {
-  const supabase = criarClienteServidor();
+  const supabase = await criarClienteServidor();
   const {
     data: { user: utilizadorSupabase },
     error: erro,

@@ -18,8 +18,9 @@ const esquemaAlteracoes = z.object({
   publicado: z.boolean().optional(),
 });
 
-export async function PATCH(pedido: Request, { params }: { params: { id: string } }) {
+export async function PATCH(pedido: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const { dependencias } = await exigirPapel(["admin", "dev"]);
     const corpo = await pedido.json();
     const dadosValidados = esquemaAlteracoes.safeParse(corpo);
@@ -30,7 +31,7 @@ export async function PATCH(pedido: Request, { params }: { params: { id: string 
       );
     }
 
-    const entrada = await atualizarEntradaBaseConhecimento(dependencias, params.id, dadosValidados.data);
+    const entrada = await atualizarEntradaBaseConhecimento(dependencias, id, dadosValidados.data);
     if (!entrada) {
       return comCors(pedido, NextResponse.json({ error: "Entrada não encontrada." }, { status: 404 }));
     }
@@ -44,10 +45,11 @@ export async function PATCH(pedido: Request, { params }: { params: { id: string 
   }
 }
 
-export async function DELETE(pedido: Request, { params }: { params: { id: string } }) {
+export async function DELETE(pedido: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const { dependencias } = await exigirPapel(["admin"]);
-    await apagarEntradaBaseConhecimento(dependencias, params.id);
+    await apagarEntradaBaseConhecimento(dependencias, id);
     return comCors(pedido, NextResponse.json({ ok: true }, { status: 200 }));
   } catch (erro) {
     if (erro instanceof ErroAutenticacao) {

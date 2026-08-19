@@ -3,7 +3,7 @@ import type { Mensagem } from "@/core/types";
 
 const rotuloOrigem: Record<string, string> = {
   history: "Já tinha respondido a algo parecido",
-  knowledge_base: "Resposta da base de conhecimento da Vértice",
+  knowledge_base: "Resposta da base de conhecimento da Vértice Digital",
   llm: "Resposta gerada automaticamente — a ser revista por um colaborador",
   ticket_ack: "Nota do ticket",
 };

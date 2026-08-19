@@ -15,10 +15,11 @@ export async function OPTIONS(pedido: Request) {
   return respostaPreflightCors(pedido);
 }
 
-export async function GET(pedido: Request, { params }: { params: { id: string } }) {
+export async function GET(pedido: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const { perfil, dependencias } = await exigirUtilizador();
-    const { ticket, atualizacoes } = await obterTicketComAtualizacoes(dependencias, perfil, params.id);
+    const { ticket, atualizacoes } = await obterTicketComAtualizacoes(dependencias, perfil, id);
     return comCors(pedido, NextResponse.json({ ticket, atualizacoes }, { status: 200 }));
   } catch (erro) {
     if (erro instanceof ErroAutenticacao) {
@@ -44,8 +45,9 @@ const esquemaAlteracoes = z.object({
 });
 
 /** PATCH /api/tickets/:id — apenas staff (admin/dev). */
-export async function PATCH(pedido: Request, { params }: { params: { id: string } }) {
+export async function PATCH(pedido: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const { utilizador, dependencias } = await exigirPapel(["admin", "dev"]);
 
     const corpo = await pedido.json();
@@ -57,7 +59,7 @@ export async function PATCH(pedido: Request, { params }: { params: { id: string 
       );
     }
 
-    const ticket = await atualizarTicket(dependencias, utilizador, { idTicket: params.id, ...dadosValidados.data });
+    const ticket = await atualizarTicket(dependencias, utilizador, { idTicket: id, ...dadosValidados.data });
     return comCors(pedido, NextResponse.json({ ticket }, { status: 200 }));
   } catch (erro) {
     if (erro instanceof ErroAutenticacao) {

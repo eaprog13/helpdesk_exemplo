@@ -7,6 +7,23 @@ import { Botao } from "@/components/ui/Button";
 import { Campo } from "@/components/ui/Input";
 import { Cartao } from "@/components/ui/Card";
 
+/**
+ * Só aceita caminhos internos relativos (ex.: "/tickets/123") como destino
+ * de redirecionamento pós-login — nunca um URL absoluto ou "//host" (que o
+ * browser trata como protocol-relative). "redirectTo" vem de um parâmetro de
+ * query controlado pelo visitante do link, por isso tem de ser validado aqui
+ * antes de navegar: sem isto, um link malicioso "/login?redirectTo=https://
+ * site-falso.pt" levaria a vítima a autenticar-se no domínio real (por isso
+ * de confiança) e a acabar redirecionada para um site de phishing (open
+ * redirect, CWE-601).
+ */
+function caminhoInternoSeguro(destino: string | null): string {
+  if (!destino || !destino.startsWith("/") || destino.startsWith("//")) {
+    return "/";
+  }
+  return destino;
+}
+
 export function FormularioLogin() {
   const router = useRouter();
   const parametrosPesquisa = useSearchParams();
@@ -48,7 +65,7 @@ export function FormularioLogin() {
       console.error("[login] não foi possível iniciar nova conversa:", erroConversa);
     }
 
-    const redirecionarPara = parametrosPesquisa.get("redirectTo") ?? "/";
+    const redirecionarPara = caminhoInternoSeguro(parametrosPesquisa.get("redirectTo"));
     router.replace(redirecionarPara);
     router.refresh();
   }
