@@ -31,6 +31,10 @@ function mensagemErroDitado(codigo: string): string {
   return MENSAGENS_ERRO_DITADO[codigo] ?? `Não foi possível usar o microfone (erro: ${codigo}).`;
 }
 
+// Tempo sem novo resultado de fala (parcial ou final) até se considerar que
+// a pessoa acabou de falar e a pergunta é enviada sozinha.
+const SILENCIO_ENVIO_MS = 1800;
+
 /**
  * Input estilo ChatGPT: textarea de altura automática, fixo no fundo da
  * janela de chat, Enter para enviar e Shift+Enter para nova linha, e um
@@ -40,11 +44,22 @@ export function CampoChat({ valor, aoAlterar, aoSubmeter, desativado }: Propried
   const refTextarea = useRef<HTMLTextAreaElement>(null);
   const refReconhecimento = useRef<SpeechRecognition | null>(null);
   const refValorAtual = useRef(valor);
+  const refAoSubmeter = useRef(aoSubmeter);
+  const refTimeoutSilencio = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const refEnvioAutomatico = useRef(false);
   const [suportaDitado, setSuportaDitado] = useState(false);
   const [aOuvir, setAOuvir] = useState(false);
   const [erroDitado, setErroDitado] = useState<string | null>(null);
 
   refValorAtual.current = valor;
+  refAoSubmeter.current = aoSubmeter;
+
+  function limparTimeoutSilencio() {
+    if (refTimeoutSilencio.current !== null) {
+      clearTimeout(refTimeoutSilencio.current);
+      refTimeoutSilencio.current = null;
+    }
+  }
 
   // API de voz nativa do próprio browser (Web Speech API): o reconhecimento
   // corre no browser/fornecedor do sistema operativo, sem chamar nenhum
@@ -56,6 +71,7 @@ export function CampoChat({ valor, aoAlterar, aoSubmeter, desativado }: Propried
     setSuportaDitado(!!construtor);
     return () => {
       refReconhecimento.current?.stop();
+      limparTimeoutSilencio();
     };
   }, []);
 
@@ -64,6 +80,8 @@ export function CampoChat({ valor, aoAlterar, aoSubmeter, desativado }: Propried
     if (!Construtor) return;
 
     if (aOuvir) {
+      refEnvioAutomatico.current = false;
+      limparTimeoutSilencio();
       refReconhecimento.current?.stop();
       return;
     }
@@ -90,17 +108,35 @@ export function CampoChat({ valor, aoAlterar, aoSubmeter, desativado }: Propried
         }
       }
       aoAlterar(`${prefixo}${transcricaoConfirmada}${parcial}`);
+
+      // Cada novo resultado (mesmo parcial) empurra o envio automático para
+      // a frente; só dispara depois de SILENCIO_ENVIO_MS sem mais fala.
+      limparTimeoutSilencio();
+      refTimeoutSilencio.current = setTimeout(() => {
+        refEnvioAutomatico.current = true;
+        reconhecimento.stop();
+      }, SILENCIO_ENVIO_MS);
     };
     reconhecimento.onerror = (evento) => {
       // "aborted" acontece sempre que se chama stop() de propósito (ex.: o
-      // próprio botão "parar ditado") — não é um erro real, não mostrar nada.
-      if (evento.error !== "aborted") {
+      // próprio botão "parar ditado"); o mesmo vale para qualquer erro que
+      // surja depois de já termos decidido parar por silêncio (ex.:
+      // "no-speech" quando o browser encerra a ligação) — não são erros
+      // reais para quem está a ver o ecrã, não mostrar nada.
+      if (evento.error !== "aborted" && !refEnvioAutomatico.current) {
         console.error("[ditado por voz] SpeechRecognition error:", evento.error);
         setErroDitado(mensagemErroDitado(evento.error));
       }
       setAOuvir(false);
     };
-    reconhecimento.onend = () => setAOuvir(false);
+    reconhecimento.onend = () => {
+      setAOuvir(false);
+      limparTimeoutSilencio();
+      if (refEnvioAutomatico.current) {
+        refEnvioAutomatico.current = false;
+        if (refValorAtual.current.trim()) refAoSubmeter.current();
+      }
+    };
 
     refReconhecimento.current = reconhecimento;
     try {
@@ -138,7 +174,9 @@ export function CampoChat({ valor, aoAlterar, aoSubmeter, desativado }: Propried
           onChange={aoEscrever}
           onKeyDown={aoPressionarTecla}
           disabled={desativado}
-          placeholder={aOuvir ? "A ouvir…" : "Escreva a sua pergunta sobre o seu site ou loja online…"}
+          placeholder={
+            aOuvir ? "A ouvir… (envia sozinho após uma pausa)" : "Escreva a sua pergunta sobre o seu site ou loja online…"
+          }
           className="max-h-[200px] flex-1 resize-none border-0 bg-transparent px-1.5 py-1.5 text-sm text-ink placeholder:text-ink-300 focus:outline-none focus:ring-0 disabled:opacity-50"
         />
         {suportaDitado && (
