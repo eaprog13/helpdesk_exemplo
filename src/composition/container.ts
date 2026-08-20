@@ -17,6 +17,7 @@ import { RepositorioArmazenamentoSupabase } from "@/adapters/supabase/storageRep
 import { FornecedorLlmAnthropic } from "@/adapters/llm/anthropicProvider";
 import { FornecedorLlmOpenAi } from "@/adapters/llm/openaiProvider";
 import { FornecedorLlmGemini } from "@/adapters/llm/geminiProvider";
+import { FornecedorLlmGroq } from "@/adapters/llm/groqProvider";
 
 import { RemetenteEmailResend } from "@/adapters/notifications/resendEmailSender";
 import { RemetenteWhatsAppTwilio } from "@/adapters/notifications/twilioWhatsAppSender";
@@ -36,7 +37,8 @@ import { RemetenteWhatsAppTwilio } from "@/adapters/notifications/twilioWhatsApp
  * uma linha.
  *
  * Para trocar de LLM: já não é preciso sequer mexer aqui — basta mudar a
- * variável de ambiente LLM_PROVIDER ("anthropic" | "openai" | "gemini").
+ * variável de ambiente LLM_PROVIDER ("anthropic" | "openai" | "gemini" |
+ * "groq").
  * ═══════════════════════════════════════════════════════════════════════
  */
 
@@ -45,6 +47,10 @@ function construirFornecedorLlm(): FornecedorLlm {
 
   switch (fornecedor) {
     case "gemini":
+      // "Gemini" aqui é sempre a Gemini Developer API (chave gerada em
+      // aistudio.google.com — Google AI Studio), nunca a Vertex AI (essa
+      // exige projeto GCP + service account, outro fluxo de autenticação
+      // completamente diferente e não implementado aqui).
       return new FornecedorLlmGemini(
         process.env.GEMINI_API_KEY ?? "",
         process.env.GEMINI_MODEL ?? "gemini-1.5-flash"
@@ -53,6 +59,11 @@ function construirFornecedorLlm(): FornecedorLlm {
       return new FornecedorLlmOpenAi(
         process.env.OPENAI_API_KEY ?? "",
         process.env.OPENAI_MODEL ?? "gpt-4o-mini"
+      );
+    case "groq":
+      return new FornecedorLlmGroq(
+        process.env.GROQ_API_KEY ?? "",
+        process.env.GROQ_MODEL ?? "llama-3.3-70b-versatile"
       );
     case "anthropic":
     default:
