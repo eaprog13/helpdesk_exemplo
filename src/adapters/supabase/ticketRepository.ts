@@ -18,6 +18,8 @@ export class RepositorioTicketSupabase implements RepositorioTicket {
         llm_answer: dados.respostaLlm,
         status: "open",
         priority: "normal",
+        department: dados.departamento ?? null,
+        assigned_dev_id: dados.idDevAtribuido ?? null,
       })
       .select("*")
       .single();
@@ -36,6 +38,7 @@ export class RepositorioTicketSupabase implements RepositorioTicket {
     if (alteracoes.estado !== undefined) payload.status = alteracoes.estado;
     if (alteracoes.prioridade !== undefined) payload.priority = alteracoes.prioridade;
     if (alteracoes.idDevAtribuido !== undefined) payload.assigned_dev_id = alteracoes.idDevAtribuido;
+    if (alteracoes.departamento !== undefined) payload.department = alteracoes.departamento;
     if (alteracoes.dataResolucao !== undefined) payload.resolved_at = alteracoes.dataResolucao;
 
     const { data, error } = await this.bd
@@ -65,5 +68,39 @@ export class RepositorioTicketSupabase implements RepositorioTicket {
       .order("created_at", { ascending: false });
     if (error) throw new Error(`[tickets.listarTodos] ${error.message}`);
     return data ?? [];
+  }
+
+  async obterCargaTrabalhoPorDev(
+    idsDevs: string[]
+  ): Promise<Record<string, { ativos: number; ultimaAtribuicaoEm: string | null }>> {
+    const carga: Record<string, { ativos: number; ultimaAtribuicaoEm: string | null }> = Object.fromEntries(
+      idsDevs.map((id) => [id, { ativos: 0, ultimaAtribuicaoEm: null }])
+    );
+    if (idsDevs.length === 0) return carga;
+
+    // Uma só consulta com tudo o que é preciso: "status" para contar só os
+    // ativos, "created_at" (de QUALQUER estado) para saber há quanto tempo
+    // cada dev não recebe um ticket novo — usado só para desempate, não
+    // para a contagem de carga em si.
+    const { data, error } = await this.bd
+      .from("tickets")
+      .select("assigned_dev_id, status, created_at")
+      .in("assigned_dev_id", idsDevs)
+      .order("created_at", { ascending: false });
+    if (error) throw new Error(`[tickets.obterCargaTrabalhoPorDev] ${error.message}`);
+
+    for (const linha of data ?? []) {
+      const id = linha.assigned_dev_id as string | null;
+      // A consulta já filtrou "in idsDevs" — mas idsDevs pode incluir um id
+      // que, por alguma razão, não tinha entrada em "carga" (não devia
+      // acontecer; a verificação é só para agradar ao noUncheckedIndexedAccess).
+      const cargaDev = id ? carga[id] : undefined;
+      if (!id || !cargaDev) continue;
+      if (linha.status === "open" || linha.status === "in_progress") cargaDev.ativos += 1;
+      // A primeira linha de cada dev que aparece é a mais recente (ordenado
+      // desc acima) — as seguintes já não devem sobrepor-se a ela.
+      if (!cargaDev.ultimaAtribuicaoEm) cargaDev.ultimaAtribuicaoEm = linha.created_at;
+    }
+    return carga;
   }
 }

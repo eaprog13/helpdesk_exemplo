@@ -77,6 +77,14 @@ export class RemetenteEmailResend implements RemetenteEmail {
   }
 
   async enviarTicketCriado(destinatario: string, nomeCompleto: string, ticket: Ticket): Promise<ResultadoEnvio> {
+    // Sem canal novo dedicado a prioridade Crítica (Slack, SMS, …) por
+    // agora — mas o assunto fica visualmente diferente para se destacar
+    // de imediato na caixa de entrada, sem precisar de infraestrutura
+    // nova. Aplica-se tanto ao email para o cliente (este) como, mais
+    // tarde, a uma eventual notificação própria para o dev atribuído.
+    const ehCritico = ticket.priority === "urgent";
+    const prefixoAssunto = ehCritico ? "🔴 URGENTE — " : "";
+
     const html = envolverHtml(
       "Registámos o seu pedido",
       `<p>Olá ${nomeCompleto},</p>
@@ -88,7 +96,21 @@ export class RemetenteEmailResend implements RemetenteEmail {
        <p>Vamos analisar o seu caso e voltamos a contactá-lo brevemente.</p>
        <p><a href="${this.urlApp}/tickets/${ticket.id}" style="color:#0F6E8C;">Acompanhar o pedido</a></p>`
     );
-    return this.enviar(destinatario, `Pedido registado — ticket #${ticket.id.slice(0, 8)}`, html);
+    return this.enviar(destinatario, `${prefixoAssunto}Pedido registado — ticket #${ticket.id.slice(0, 8)}`, html);
+  }
+
+  async enviarTicketAssumido(destinatario: string, nomeCompleto: string, ticket: Ticket): Promise<ResultadoEnvio> {
+    const html = envolverHtml(
+      "O seu pedido está a ser tratado",
+      `<p>Olá ${nomeCompleto},</p>
+       <p>O seu pedido (ticket <strong>#${ticket.id.slice(
+         0,
+         8
+       )}</strong>) já foi assumido pela nossa equipa e está a ser tratado.</p>
+       <p>Vamos voltar a contactá-lo assim que tivermos uma resposta.</p>
+       <p><a href="${this.urlApp}/tickets/${ticket.id}" style="color:#0F6E8C;">Acompanhar o pedido</a></p>`
+    );
+    return this.enviar(destinatario, `O seu pedido está a ser tratado — ticket #${ticket.id.slice(0, 8)}`, html);
   }
 
   async enviarTicketResolvido(

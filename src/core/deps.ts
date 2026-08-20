@@ -34,4 +34,14 @@ export interface Dependencias {
   email: RemetenteEmail;
   whatsapp: RemetenteWhatsApp;
   armazenamento: RepositorioArmazenamento;
+  /**
+   * Liga/desliga a "lapidação" de respostas de histórico/KB pela LLM (ver
+   * FornecedorLlm.humanizarResposta em core/ports/llm.ts) — decidido aqui,
+   * não dentro de core/services, para o core continuar sem ler variáveis
+   * de ambiente diretamente. Controlado por RESPOSTA_HUMANIZADA_ATIVA no
+   * .env; desligado por omissão enquanto os limiares de deteção de
+   * contexto (LIMIAR_RELEVANCIA_HISTORICO/BASE_CONHECIMENTO em
+   * chatService.ts) ainda estão a ser validados.
+   */
+  respostaHumanizadaAtiva: boolean;
 }

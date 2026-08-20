@@ -1,5 +1,5 @@
 import type { Dependencias } from "@/core/deps";
-import type { TipoSite } from "@/core/types";
+import type { Departamento, TipoSite } from "@/core/types";
 
 /** Já existe uma entrada da Base de Conhecimento com este título (índice único em `title`). */
 export class TituloDuplicadoError extends Error {}
@@ -11,7 +11,14 @@ export async function listarBaseConhecimento(dependencias: Dependencias) {
 export async function criarEntradaBaseConhecimento(
   dependencias: Dependencias,
   idAutor: string,
-  dados: { titulo: string; conteudo: string; tipoSite: TipoSite; etiquetas: string[]; publicado: boolean }
+  dados: {
+    titulo: string;
+    conteudo: string;
+    tipoSite: TipoSite[];
+    etiquetas: string[];
+    publicado: boolean;
+    departamento?: Departamento | null;
+  }
 ) {
   return dependencias.baseConhecimento.criar({ ...dados, criadoPor: idAutor });
 }
@@ -19,7 +26,14 @@ export async function criarEntradaBaseConhecimento(
 export async function atualizarEntradaBaseConhecimento(
   dependencias: Dependencias,
   id: string,
-  alteracoes: Partial<{ titulo: string; conteudo: string; tipoSite: TipoSite; etiquetas: string[]; publicado: boolean }>
+  alteracoes: Partial<{
+    titulo: string;
+    conteudo: string;
+    tipoSite: TipoSite[];
+    etiquetas: string[];
+    publicado: boolean;
+    departamento: Departamento | null;
+  }>
 ) {
   return dependencias.baseConhecimento.atualizar(id, alteracoes);
 }

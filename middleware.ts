@@ -2,7 +2,7 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { construirCabecalhosSeguranca } from "@/lib/security/headers";
 
-const CAMINHOS_PUBLICOS = ["/login", "/api/auth"];
+const CAMINHOS_PUBLICOS = ["/login", "/forgot-password", "/api/auth"];
 
 function ehCaminhoPublico(caminho: string) {
   return (

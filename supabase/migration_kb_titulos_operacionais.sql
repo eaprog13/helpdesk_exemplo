@@ -1,4 +1,8 @@
 -- ════════════════════════════════════════════════════════════════════════
+-- NOTA (2026-08-20): site_type passou de valor único para array (ver
+-- supabase/migration_tipos_site_multiplos.sql) — requer essa migração já
+-- aplicada.
+--
 -- Migração: afinar títulos operacionais + entrada de triagem genérica
 -- Gerado a 2026-08-19, depois de validar seed_knowledge_base_operacional.sql
 -- com perguntas reais por categoria. Dois problemas encontrados:
@@ -50,7 +54,7 @@ insert into public.knowledge_base (title, content, site_type, tags, is_published
 (
   'Tenho um problema com o meu site ou loja',
   'Para ajudarmos mais depressa, descreva o que está a acontecer com mais detalhe: é um problema de pagamento, não consegue aceder ao painel de administração, os seus clientes não conseguem abrir o site, o site ou loja parece estar em baixo ou lento, ou há algo que parece partido ou com erro numa página? Cada uma destas situações tem passos próprios de diagnóstico neste centro de apoio — quanto mais específico for, mais rápido conseguimos ajudar.',
-  'both',
+  '{}'::text[],
   array['problema', 'ajuda', 'suporte', 'duvida', 'nao-sei-o-que-e', 'triagem', 'algo-errado'],
   true
 )

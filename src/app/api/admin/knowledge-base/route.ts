@@ -27,14 +27,16 @@ export async function GET(pedido: Request) {
 const esquemaCriacao = z.object({
   titulo: z.string().min(3).max(200),
   conteudo: z.string().min(10).max(8000),
-  tipoSite: z.enum(["institutional", "ecommerce", "both"]),
+  // [] = artigo genérico, aplica-se a todos os tipos (ver TipoSite em core/types.ts).
+  tipoSite: z.array(z.enum(["institutional", "ecommerce", "web_app", "mobile_app", "other"])).max(5).default([]),
   etiquetas: z.array(z.string().min(1).max(40)).max(10).default([]),
   publicado: z.boolean().default(true),
+  departamento: z.enum(["desenvolvimento", "marketing", "design", "geral"]).nullable().optional(),
 });
 
 export async function POST(pedido: Request) {
   try {
-    const { utilizador, dependencias } = await exigirPapel(["admin", "dev"]);
+    const { utilizador, perfil, dependencias } = await exigirPapel(["admin", "dev"]);
     const corpo = await pedido.json();
     const dadosValidados = esquemaCriacao.safeParse(corpo);
     if (!dadosValidados.success) {
@@ -44,7 +46,16 @@ export async function POST(pedido: Request) {
       );
     }
 
-    const entrada = await criarEntradaBaseConhecimento(dependencias, utilizador.id, dadosValidados.data);
+    // Um dev nunca publica de imediato — o artigo entra sempre como
+    // rascunho, à espera de um admin rever e publicar (ver "Publicar" em
+    // KnowledgeBaseManager.tsx). Reforçado aqui, não só na UI: o valor
+    // enviado pelo cliente é ignorado para quem não é admin.
+    const publicado = perfil.role === "admin" ? dadosValidados.data.publicado : false;
+
+    const entrada = await criarEntradaBaseConhecimento(dependencias, utilizador.id, {
+      ...dadosValidados.data,
+      publicado,
+    });
     return comCors(pedido, NextResponse.json({ entrada }, { status: 201 }));
   } catch (erro) {
     if (erro instanceof ErroAutenticacao) {

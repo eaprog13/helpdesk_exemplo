@@ -11,7 +11,23 @@
 // silenciosos em tempo de execução (o campo ficaria "undefined").
 
 export type PapelUtilizador = "client" | "dev" | "admin";
-export type TipoSite = "institutional" | "ecommerce" | "both";
+/**
+ * Departamento — usado para dois fins: (1) catalogar a que área pertence
+ * um artigo da base de conhecimento, (2) filtrar quem pode receber um
+ * ticket na atribuição automática (ver core/services/ticketService.ts).
+ * `null`/ausente num ticket significa "Por triar" — nunca entra na
+ * atribuição automática até alguém lhe definir departamento à mão.
+ */
+export type Departamento = "desenvolvimento" | "marketing" | "design" | "geral";
+/**
+ * Tipo de produto que o cliente tem com a Vértice, ou a que tipo de produto
+ * um artigo da KB se aplica — ver Perfil.site_type e
+ * EntradaBaseConhecimento.site_type. Um cliente pode ter mais do que um
+ * (ex.: site institucional E loja online), por isso aparece sempre como
+ * array, nunca como valor único — "both" não existe como valor (ver
+ * supabase/migration_tipos_site_multiplos.sql).
+ */
+export type TipoSite = "institutional" | "ecommerce" | "web_app" | "mobile_app" | "other";
 export type PapelMensagem = "user" | "assistant" | "system";
 export type OrigemMensagem = "history" | "knowledge_base" | "llm" | "ticket_ack";
 export type EstadoTicket = "open" | "in_progress" | "resolved" | "closed";
@@ -30,9 +46,24 @@ export interface Perfil {
   full_name: string;
   company_name: string | null;
   phone: string | null;
-  site_type: TipoSite | null;
+  /**
+   * Tipo(s) de produto que o cliente TEM contratado com a Vértice (Site
+   * institucional/Loja online/Aplicação Web/Mobile App/Outros) — o
+   * "serviço" mostrado em /admin/clients. Nunca vazio para um cliente já
+   * criado (obrigatório no formulário). Não confundir com `department`
+   * abaixo, que é só organização interna do admin.
+   */
+  site_type: TipoSite[];
   must_change_password: boolean;
   logo_url: string | null;
+  /**
+   * Organização interna do admin — em dev/admin, que equipa(s) a pessoa
+   * integra (decide elegibilidade na atribuição automática de tickets,
+   * ver Departamento); em client, um agrupamento interno só para o admin
+   * (nunca usado na atribuição, nunca mostrado ao cliente como "serviço"
+   * — isso é site_type acima). `[]` = nenhum definido.
+   */
+  department: Departamento[];
   created_at: string;
   updated_at: string;
 }
@@ -41,9 +72,12 @@ export interface EntradaBaseConhecimento {
   id: string;
   title: string;
   content: string;
-  site_type: TipoSite;
+  /** A que tipo(s) de produto este artigo se aplica. `[]` = genérico, aplica-se a todos (ver TipoSite). */
+  site_type: TipoSite[];
   tags: string[];
   is_published: boolean;
+  /** Catalogação editorial — ver Departamento. */
+  department: Departamento | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -78,6 +112,8 @@ export interface Ticket {
   llm_answer: string | null;
   status: EstadoTicket;
   priority: PrioridadeTicket;
+  /** `null` = "Por triar" — ver Departamento. */
+  department: Departamento | null;
   created_at: string;
   updated_at: string;
   resolved_at: string | null;

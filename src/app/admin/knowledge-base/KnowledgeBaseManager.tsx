@@ -5,21 +5,50 @@ import { Cartao } from "@/components/ui/Card";
 import { Campo } from "@/components/ui/Input";
 import { Botao } from "@/components/ui/Button";
 import { Distintivo } from "@/components/ui/Badge";
-import type { EntradaBaseConhecimento, TipoSite } from "@/core/types";
+import type { EntradaBaseConhecimento, TipoSite, Departamento } from "@/core/types";
 
+// [] (nenhum selecionado) = artigo genérico, aplica-se a todos os tipos —
+// ver TipoSite em core/types.ts. "Ambos" já não existe como valor: um
+// artigo pode aplicar-se a vários tipos em concreto, ou a nenhum (= todos).
 const TIPOS_SITE: { valor: TipoSite; rotulo: string }[] = [
-  { valor: "institutional", rotulo: "Site institucional" },
-  { valor: "ecommerce", rotulo: "Loja online" },
-  { valor: "both", rotulo: "Ambos" },
+  { valor: "institutional", rotulo: "Site Institucional" },
+  { valor: "ecommerce", rotulo: "Loja Online" },
+  { valor: "web_app", rotulo: "Aplicação Web" },
+  { valor: "mobile_app", rotulo: "Mobile App" },
+  { valor: "other", rotulo: "Outros" },
 ];
 
-export function GestorBaseConhecimento({ entradasIniciais }: { entradasIniciais: EntradaBaseConhecimento[] }) {
+function alternarNaLista<T>(lista: T[], valor: T): T[] {
+  return lista.includes(valor) ? lista.filter((v) => v !== valor) : [...lista, valor];
+}
+
+// "" = por classificar — ver core/types.ts (Departamento) e a nota em
+// core/services/chatService.ts sobre porque isto ainda não decide sozinho
+// o departamento de um ticket, mesmo já existindo aqui.
+const DEPARTAMENTOS: { valor: Departamento | ""; rotulo: string }[] = [
+  { valor: "", rotulo: "Por classificar" },
+  { valor: "desenvolvimento", rotulo: "Desenvolvimento" },
+  { valor: "marketing", rotulo: "Marketing Digital" },
+  { valor: "design", rotulo: "Branding/Design" },
+  { valor: "geral", rotulo: "Geral" },
+];
+
+export function GestorBaseConhecimento({
+  entradasIniciais,
+  papel,
+}: {
+  entradasIniciais: EntradaBaseConhecimento[];
+  /** Um dev nunca publica de imediato — a rota já reforça isto, isto é só para a UI não prometer o que não cumpre. */
+  papel: "admin" | "dev";
+}) {
+  const souAdmin = papel === "admin";
   const [entradas, setEntradas] = useState(entradasIniciais);
   const [formulario, setFormulario] = useState({
     titulo: "",
     conteudo: "",
-    tipoSite: "both" as TipoSite,
+    tipoSite: [] as TipoSite[],
     etiquetas: "",
+    departamento: "" as Departamento | "",
   });
   const [aCarregar, setACarregar] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -40,7 +69,11 @@ export function GestorBaseConhecimento({ entradasIniciais }: { entradasIniciais:
           .split(",")
           .map((t) => t.trim())
           .filter(Boolean),
-        publicado: true,
+        // Um dev cria sempre como rascunho — a rota força isto de qualquer
+        // forma, mas mandar já o valor certo evita um "porquê é que ficou
+        // por publicar se eu disse que sim" confuso.
+        publicado: souAdmin,
+        departamento: formulario.departamento || null,
       }),
     });
     const corpo = await resposta.json();
@@ -52,7 +85,7 @@ export function GestorBaseConhecimento({ entradasIniciais }: { entradasIniciais:
     }
 
     setEntradas((anteriores) => [corpo.entrada, ...anteriores]);
-    setFormulario({ titulo: "", conteudo: "", tipoSite: "both", etiquetas: "" });
+    setFormulario({ titulo: "", conteudo: "", tipoSite: [], etiquetas: "", departamento: "" });
   }
 
   async function alternarPublicado(entrada: EntradaBaseConhecimento) {
@@ -87,23 +120,49 @@ export function GestorBaseConhecimento({ entradasIniciais }: { entradasIniciais:
               onChange={(e) => setFormulario({ ...formulario, conteudo: e.target.value })}
               className="w-full rounded-lg border border-ink-100 px-3.5 py-2.5 text-sm transition-shadow duration-150 focus:outline-none focus:ring-2 focus:ring-accent"
             />
-            <select
-              value={formulario.tipoSite}
-              onChange={(e) => setFormulario({ ...formulario, tipoSite: e.target.value as TipoSite })}
-              className="w-full rounded-lg border border-ink-100 bg-white px-3.5 py-2.5 text-sm text-ink transition-shadow duration-150 focus:outline-none focus:ring-2 focus:ring-accent"
-            >
-              {TIPOS_SITE.map((t) => (
-                <option key={t.valor} value={t.valor}>
-                  {t.rotulo}
-                </option>
-              ))}
-            </select>
+
+            <fieldset>
+              <legend className="mb-1.5 text-sm font-medium text-ink">
+                Tipo(s) de site <span className="font-normal text-ink-300">(nenhum = genérico, aplica-se a todos)</span>
+              </legend>
+              <div className="flex flex-wrap gap-3">
+                {TIPOS_SITE.map((t) => (
+                  <label key={t.valor} className="flex items-center gap-1.5 text-sm text-ink-400">
+                    <input
+                      type="checkbox"
+                      checked={formulario.tipoSite.includes(t.valor)}
+                      onChange={() =>
+                        setFormulario({ ...formulario, tipoSite: alternarNaLista(formulario.tipoSite, t.valor) })
+                      }
+                    />
+                    {t.rotulo}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
             <Campo
               placeholder="Etiquetas separadas por vírgula (ex: password, loja, faturas)"
               value={formulario.etiquetas}
               onChange={(e) => setFormulario({ ...formulario, etiquetas: e.target.value })}
             />
+            <select
+              value={formulario.departamento}
+              onChange={(e) => setFormulario({ ...formulario, departamento: e.target.value as Departamento | "" })}
+              className="w-full rounded-lg border border-ink-100 bg-white px-3.5 py-2.5 text-sm text-ink transition-shadow duration-150 focus:outline-none focus:ring-2 focus:ring-accent"
+            >
+              {DEPARTAMENTOS.map((d) => (
+                <option key={d.rotulo} value={d.valor}>
+                  {d.rotulo}
+                </option>
+              ))}
+            </select>
 
+            {!souAdmin && (
+              <p className="text-xs text-ink-300">
+                Entra como rascunho — só um admin pode publicar (ver "Entradas" ao lado).
+              </p>
+            )}
             {erro && <p className="text-sm text-danger">{erro}</p>}
 
             <Botao type="submit" isLoading={aCarregar} className="w-full">
@@ -128,10 +187,25 @@ export function GestorBaseConhecimento({ entradasIniciais }: { entradasIniciais:
               </div>
               <p className="line-clamp-2 text-xs text-ink-400">{entrada.content}</p>
               <div className="mt-2 flex items-center justify-between">
-                <span className="text-[11px] text-ink-300">{entrada.site_type}</span>
-                <Botao variant="ghost" size="sm" onClick={() => alternarPublicado(entrada)}>
-                  {entrada.is_published ? "Despublicar" : "Publicar"}
-                </Botao>
+                <span className="flex flex-wrap items-center gap-1 text-[11px] text-ink-300">
+                  {entrada.site_type.length > 0 ? (
+                    entrada.site_type.map((t) => <Distintivo key={t} value={t} />)
+                  ) : (
+                    <span>Genérico</span>
+                  )}
+                  <span>· {DEPARTAMENTOS.find((d) => d.valor === (entrada.department ?? ""))?.rotulo}</span>
+                </span>
+                {/* Despublicar (retirar do ar) continua aberto a qualquer
+                    staff; publicar (pôr no ar) é só admin — ver nota em
+                    api/admin/knowledge-base/[id]/route.ts. */}
+                {(entrada.is_published || souAdmin) && (
+                  <Botao variant="ghost" size="sm" onClick={() => alternarPublicado(entrada)}>
+                    {entrada.is_published ? "Despublicar" : "Publicar"}
+                  </Botao>
+                )}
+                {!entrada.is_published && !souAdmin && (
+                  <span className="text-[11px] text-ink-300">Aguarda revisão de um admin</span>
+                )}
               </div>
             </Cartao>
           ))}

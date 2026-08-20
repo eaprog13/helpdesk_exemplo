@@ -56,9 +56,33 @@ create table if not exists public.profiles (
   full_name    text not null,
   company_name text,
   phone        text,                      -- formato E.164, ex: +351912345678 (para WhatsApp)
-  site_type    text check (site_type in ('institutional', 'ecommerce', 'both')),
+  -- Que tipo(s) de produto o cliente tem com a Vértice (Site
+  -- institucional/Loja online/Aplicação Web/Mobile App/Outros) — pode ter
+  -- mais do que um (ex.: site institucional E loja online), por isso é
+  -- array, não um valor único ("Ambos" já não existe como valor mágico —
+  -- ver supabase/migration_tipos_site_multiplos.sql). Define-se sempre por
+  -- uma chamada a perfis.atualizar() depois de o perfil já existir (ver
+  -- core/services/clientService.ts, criarCliente) — nunca via
+  -- raw_user_meta_data/handle_new_user, por isso começa em '{}'.
+  site_type    text[] not null default '{}'
+    check (site_type <@ array['institutional', 'ecommerce', 'web_app', 'mobile_app', 'other']::text[]),
   must_change_password boolean not null default true,
   logo_url     text,                      -- logótipo da empresa cliente (bucket "logos"), mostrado após login
+  -- Significado depende do role — a mesma coluna serve dois propósitos
+  -- distintos, mas sem conflito porque nunca se cruzam:
+  --   • dev/admin: que equipa(s) a pessoa integra — decide quem é
+  --     candidato à atribuição automática de tickets (ver
+  --     core/services/ticketService.ts, listarEquipa() só olha para
+  --     role in ('dev','admin') — um client aqui nunca entra nessa conta).
+  --   • client: que serviços da Vértice Digital este cliente tem
+  --     (Desenvolvimento = site/loja, Marketing Digital, Branding/Design)
+  --     — só organização/filtro em /admin/clients, nunca usado na
+  --     atribuição de tickets.
+  -- Array (não um só valor) porque uma pessoa/cliente pode cobrir mais do
+  -- que um departamento (ex.: a mesma pessoa a tratar de Marketing e de
+  -- Branding/Design; um cliente com site E campanhas de Marketing ativas).
+  department   text[] not null default '{}'
+    check (department <@ array['desenvolvimento', 'marketing', 'design', 'geral']::text[]),
   created_at   timestamptz not null default now(),
   updated_at   timestamptz not null default now()
 );
@@ -81,9 +105,18 @@ create table if not exists public.knowledge_base (
   id          uuid primary key default gen_random_uuid(),
   title       text not null,
   content     text not null,
-  site_type   text not null default 'both' check (site_type in ('institutional', 'ecommerce', 'both')),
+  -- Array vazio '{}' = artigo genérico, aplica-se a todos os tipos de
+  -- site/produto (ver search_knowledge_base abaixo) — é o antigo papel de
+  -- 'both', que já não existe como valor.
+  site_type   text[] not null default '{}'
+    check (site_type <@ array['institutional', 'ecommerce', 'web_app', 'mobile_app', 'other']::text[]),
   tags        text[] not null default '{}',
   is_published boolean not null default true,
+  -- Catalogação editorial (não calculada): a que departamento pertence o
+  -- assunto deste artigo. Metadado por agora — não usado ainda para
+  -- classificar automaticamente o departamento de um ticket criado a
+  -- partir do chat, ver nota extensa em core/services/chatService.ts.
+  department  text check (department in ('desenvolvimento', 'marketing', 'design', 'geral')),
   created_by  uuid references public.profiles (id),
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now(),
@@ -95,7 +128,8 @@ create table if not exists public.knowledge_base (
 );
 
 create index if not exists knowledge_base_search_idx on public.knowledge_base using gin (search_vector);
-create index if not exists knowledge_base_site_type_idx on public.knowledge_base (site_type);
+-- GIN, não btree: o filtro usa sobreposição de arrays (&&), não igualdade.
+create index if not exists knowledge_base_site_type_idx on public.knowledge_base using gin (site_type);
 -- Evita duplicados silenciosos ao correr um ficheiro de seed mais do que
 -- uma vez (foi o que aconteceu com seed_knowledge_base_institucional.sql,
 -- criando 11 entradas repetidas que inflacionavam artificialmente o
@@ -144,6 +178,12 @@ create table if not exists public.tickets (
   llm_answer      text,                -- resposta que a LLM deu ao cliente, para contexto do dev
   status          text not null default 'open' check (status in ('open', 'in_progress', 'resolved', 'closed')),
   priority        text not null default 'normal' check (priority in ('low', 'normal', 'high', 'urgent')),
+  -- Nulo = "Por triar": nunca entra na atribuição automática (ver
+  -- core/services/ticketService.ts) até um admin/dev lhe definir um
+  -- departamento à mão. Definido de duas formas: o próprio cliente escolhe
+  -- ao abrir um ticket manualmente (botão "Abrir ticket"), ou um admin
+  -- triando um ticket nascido do chat.
+  department      text check (department in ('desenvolvimento', 'marketing', 'design', 'geral')),
   created_at      timestamptz not null default now(),
   updated_at      timestamptz not null default now(),
   resolved_at     timestamptz
@@ -151,6 +191,8 @@ create table if not exists public.tickets (
 
 create index if not exists tickets_client_idx on public.tickets (client_id);
 create index if not exists tickets_status_idx on public.tickets (status);
+create index if not exists tickets_assigned_dev_idx on public.tickets (assigned_dev_id);
+create index if not exists tickets_department_idx on public.tickets (department);
 
 -- ── Atualizações/comentários de um ticket (thread interno + respostas ao cliente) ─
 create table if not exists public.ticket_updates (
@@ -292,16 +334,17 @@ create aggregate public.tsquery_or_agg (tsquery) (
 -- toda mantém o rank alto.
 create or replace function public.search_knowledge_base(
   query_text text,
-  filter_site_type text default null,
+  filter_site_types text[] default null,
   max_results int default 3
 )
 returns table (
   id uuid,
   title text,
   content text,
-  site_type text,
+  site_type text[],
   tags text[],
   is_published boolean,
+  department text,
   created_by uuid,
   created_at timestamptz,
   updated_at timestamptz,
@@ -318,19 +361,26 @@ as $$
   ),
   candidatos as (
     select
-      kb.id, kb.title, kb.content, kb.site_type, kb.tags, kb.is_published,
+      kb.id, kb.title, kb.content, kb.site_type, kb.tags, kb.is_published, kb.department,
       kb.created_by, kb.created_at, kb.updated_at,
       ts_rank_cd(kb.search_vector, consulta.consulta_or, 32) as rank_bruto,
       consulta.termos,
       kb.search_vector
     from public.knowledge_base kb, consulta
     where kb.is_published = true
-      and (filter_site_type is null or kb.site_type = filter_site_type or kb.site_type = 'both')
+      and (
+        -- Sem filtro (cliente sem nenhum tipo definido) → não restringe.
+        filter_site_types is null or array_length(filter_site_types, 1) is null
+        -- Artigo genérico (sem tipo específico) → aplica-se sempre.
+        or kb.site_type = '{}'
+        -- Caso comum: algum tipo do cliente está entre os tipos do artigo.
+        or kb.site_type && filter_site_types
+      )
       and consulta.consulta_or is not null
       and kb.search_vector @@ consulta.consulta_or
   )
   select
-    c.id, c.title, c.content, c.site_type, c.tags, c.is_published,
+    c.id, c.title, c.content, c.site_type, c.tags, c.is_published, c.department,
     c.created_by, c.created_at, c.updated_at,
     (
       (select count(*) from unnest(c.termos) t where c.search_vector @@ t)::real
@@ -448,14 +498,16 @@ language plpgsql
 security definer set search_path = public
 as $$
 begin
-  insert into public.profiles (id, role, full_name, company_name, phone, site_type)
+  -- site_type (tal como department) começa sempre em '{}' — nunca vem de
+  -- raw_user_meta_data, é definido a seguir por uma chamada explícita a
+  -- perfis.atualizar() (ver core/services/clientService.ts, criarCliente).
+  insert into public.profiles (id, role, full_name, company_name, phone)
   values (
     new.id,
     coalesce(new.raw_user_meta_data ->> 'role', 'client'),
     coalesce(new.raw_user_meta_data ->> 'full_name', new.email),
     new.raw_user_meta_data ->> 'company_name',
-    new.raw_user_meta_data ->> 'phone',
-    coalesce(new.raw_user_meta_data ->> 'site_type', 'institutional')
+    new.raw_user_meta_data ->> 'phone'
   )
   on conflict (id) do nothing;
   return new;

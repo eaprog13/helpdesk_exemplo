@@ -12,6 +12,12 @@ export interface ResultadoEnvio {
 export interface RemetenteEmail {
   enviarCredenciais(destinatario: string, nomeCompleto: string, palavraPasseTemporaria: string): Promise<ResultadoEnvio>;
   enviarTicketCriado(destinatario: string, nomeCompleto: string, ticket: Ticket): Promise<ResultadoEnvio>;
+  /**
+   * Mensagem genérica assim que um dev assume o ticket (open → in_progress)
+   * — só avisa que já há alguém a tratar do pedido, sem detalhe nenhum do
+   * caso (ver core/services/ticketService.ts, atualizarTicket).
+   */
+  enviarTicketAssumido(destinatario: string, nomeCompleto: string, ticket: Ticket): Promise<ResultadoEnvio>;
   enviarTicketResolvido(
     destinatario: string,
     nomeCompleto: string,

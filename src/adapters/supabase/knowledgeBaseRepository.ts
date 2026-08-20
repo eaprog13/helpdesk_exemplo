@@ -16,12 +16,12 @@ export class RepositorioBaseConhecimentoSupabase implements RepositorioBaseConhe
 
   async pesquisar(
     pergunta: string,
-    tipoSite: TipoSite | null,
+    tiposSite: TipoSite[],
     maxResultados: number
   ): Promise<CorrespondenciaBaseConhecimento[]> {
     const { data, error } = await this.bd.rpc("search_knowledge_base", {
       query_text: pergunta,
-      filter_site_type: tipoSite ?? null,
+      filter_site_types: tiposSite.length > 0 ? tiposSite : null,
       max_results: maxResultados,
     });
     if (error) throw new Error(`[baseConhecimento.pesquisar] ${error.message}`);
@@ -47,6 +47,7 @@ export class RepositorioBaseConhecimentoSupabase implements RepositorioBaseConhe
         tags: entrada.etiquetas,
         is_published: entrada.publicado,
         created_by: entrada.criadoPor,
+        department: entrada.departamento ?? null,
       })
       .select("*")
       .single();
@@ -67,6 +68,7 @@ export class RepositorioBaseConhecimentoSupabase implements RepositorioBaseConhe
     if (alteracoes.tipoSite !== undefined) payload.site_type = alteracoes.tipoSite;
     if (alteracoes.etiquetas !== undefined) payload.tags = alteracoes.etiquetas;
     if (alteracoes.publicado !== undefined) payload.is_published = alteracoes.publicado;
+    if (alteracoes.departamento !== undefined) payload.department = alteracoes.departamento;
 
     const { data, error } = await this.bd
       .from("knowledge_base")

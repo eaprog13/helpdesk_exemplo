@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { clsx } from "clsx";
 
 interface ItemNavegacao {
@@ -11,6 +11,12 @@ interface ItemNavegacao {
 
 export function BarraLateral({ itens, rotuloMarca }: { itens: ItemNavegacao[]; rotuloMarca: string }) {
   const caminhoAtual = usePathname();
+  // Alguns itens (ex.: "Os meus tickets" vs "Fila do departamento" na
+  // sidebar do dev) apontam para o MESMO caminho com queries diferentes
+  // (?vista=...) — por isso o destaque de "ativo" tem de olhar também para
+  // a query, não só para o pathname, senão vários itens ficavam sempre
+  // destacados ao mesmo tempo.
+  const queryAtual = useSearchParams().toString();
 
   return (
     <aside className="flex w-56 flex-shrink-0 flex-col border-r border-ink-100 bg-ink text-white">
@@ -21,7 +27,10 @@ export function BarraLateral({ itens, rotuloMarca }: { itens: ItemNavegacao[]; r
       </div>
       <nav className="flex-1 space-y-1 px-3">
         {itens.map((item) => {
-          const ativo = caminhoAtual === item.href || caminhoAtual.startsWith(`${item.href}/`);
+          const [caminhoItem, queryItem = ""] = item.href.split("?");
+          const ativo = item.href.includes("?")
+            ? caminhoAtual === caminhoItem && queryAtual === queryItem
+            : (caminhoAtual === caminhoItem || caminhoAtual.startsWith(`${caminhoItem}/`)) && queryAtual === "";
           return (
             <Link
               key={item.href}

@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { criarClienteSupabase } from "@/lib/supabase/client";
 import { Botao } from "@/components/ui/Button";
 import { Campo } from "@/components/ui/Input";
+import { CampoPassword } from "@/components/ui/PasswordInput";
 import { Cartao } from "@/components/ui/Card";
 
 /**
@@ -89,12 +91,16 @@ export function FormularioLogin() {
             />
           </div>
           <div>
-            <label htmlFor="palavraPasse" className="mb-1.5 block text-sm font-medium text-ink">
-              Password
-            </label>
-            <Campo
+            <div className="mb-1.5 flex items-center justify-between">
+              <label htmlFor="palavraPasse" className="block text-sm font-medium text-ink">
+                Password
+              </label>
+              <Link href="/forgot-password" className="text-xs text-accent-hover underline">
+                Esqueceu-se da password?
+              </Link>
+            </div>
+            <CampoPassword
               id="palavraPasse"
-              type="password"
               autoComplete="current-password"
               required
               value={palavraPasse}
@@ -116,7 +122,11 @@ export function FormularioLogin() {
       </Cartao>
 
       <p className="mt-6 text-center text-xs text-ink-300">
-        Ainda não tem acesso? Contacte a equipa da Vértice para lhe ser criada uma conta.
+        Ainda não tem acesso? Contacte a equipa da Vértice Digital em{" "}
+        <a href="mailto:geral@vertice-digital.example" className="text-accent-hover underline">
+          geral@vertice-digital.example
+        </a>{" "}
+        para lhe ser criada uma conta.
       </p>
     </>
   );

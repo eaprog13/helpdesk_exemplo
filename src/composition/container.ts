@@ -102,6 +102,7 @@ export function obterContentor(): Dependencias {
       process.env.TWILIO_WHATSAPP_FROM ?? "",
       process.env.WHATSAPP_NOTIFICATIONS_ENABLED === "true"
     ),
+    respostaHumanizadaAtiva: process.env.RESPOSTA_HUMANIZADA_ATIVA === "true",
   };
 
   return dependenciasEmCache;

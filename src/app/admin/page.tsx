@@ -8,12 +8,37 @@ export default async function PaginaResumoAdmin() {
 
   const [tickets, clientes] = await Promise.all([listarTickets(dependencias, perfil), listarClientes(dependencias)]);
 
-  const estatisticas = [
-    { rotulo: "Tickets abertos", valor: tickets.filter((t) => t.status === "open").length },
-    { rotulo: "Em curso", valor: tickets.filter((t) => t.status === "in_progress").length },
-    { rotulo: "Resolvidos", valor: tickets.filter((t) => t.status === "resolved").length },
-    { rotulo: "Clientes ativos", valor: clientes.length },
-  ];
+  // Um dev quer ver o que é dele primeiro: o que já assumiu e onde vai
+  // buscar mais trabalho (fila do seu departamento) — um admin quer a
+  // fotografia geral de toda a equipa.
+  const estatisticas =
+    perfil.role === "dev"
+      ? [
+          {
+            rotulo: "Por assumir (meus)",
+            valor: tickets.filter((t) => t.assigned_dev_id === perfil.id && t.status === "open").length,
+          },
+          {
+            rotulo: "Em resolução (meus)",
+            valor: tickets.filter((t) => t.assigned_dev_id === perfil.id && t.status === "in_progress").length,
+          },
+          {
+            rotulo: "Resolvidos (meus)",
+            valor: tickets.filter((t) => t.assigned_dev_id === perfil.id && t.status === "resolved").length,
+          },
+          {
+            rotulo: "Na fila do meu departamento",
+            valor: tickets.filter(
+              (t) => !t.assigned_dev_id && t.status === "open" && t.department && perfil.department.includes(t.department)
+            ).length,
+          },
+        ]
+      : [
+          { rotulo: "Tickets abertos", valor: tickets.filter((t) => t.status === "open").length },
+          { rotulo: "Em curso", valor: tickets.filter((t) => t.status === "in_progress").length },
+          { rotulo: "Resolvidos", valor: tickets.filter((t) => t.status === "resolved").length },
+          { rotulo: "Clientes ativos", valor: clientes.length },
+        ];
 
   return (
     <div className="mx-auto h-full max-w-5xl overflow-y-auto px-6 py-6">

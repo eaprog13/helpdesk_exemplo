@@ -4,6 +4,7 @@ import { ErroAcessoNegado, ErroNaoEncontrado, obterTicketComAtualizacoes } from 
 import { Cartao } from "@/components/ui/Card";
 import { Distintivo } from "@/components/ui/Badge";
 import { ListaAnexosTicket } from "@/components/ticket/AttachmentsList";
+import { AcoesTicketCliente } from "@/components/ticket/ClientTicketActions";
 
 export default async function PaginaDetalhePedidoCliente({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -29,6 +30,8 @@ export default async function PaginaDetalhePedidoCliente({ params }: { params: P
         <p className="mb-1 text-xs font-medium uppercase tracking-wide text-ink-300">A sua pergunta</p>
         <p className="text-sm text-ink">{ticket.question}</p>
       </Cartao>
+
+      {ticket.status === "resolved" && <AcoesTicketCliente idTicket={ticket.id} />}
 
       <Cartao className="mb-4 p-4">
         <p className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-300">Anexos</p>
