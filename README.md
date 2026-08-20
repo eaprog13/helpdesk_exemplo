@@ -1,44 +1,103 @@
 # Vértice · Centro de Apoio ao Cliente
 
-Aplicação interna de apoio ao cliente para a Vértice, destinada a clientes com
-**sites institucionais** e **lojas online**. Fluxo:
+Aplicação interna de apoio ao cliente da **Vértice**, desenvolvida para clientes com **sites institucionais** e **lojas online**.
 
-1. O cliente recebe as credenciais de acesso por email (criadas por um admin).
-2. A primeira página é só um logótipo e uma caixa de login. Só depois de
-   autenticar é que a caixa de pergunta abre — estilo ChatGPT: o cliente
-   escreve a pergunta e a resposta aparece numa caixa de texto por baixo.
-   Não há mais nenhuma ação exigida ao cliente. Ao abrir o chat, vê sempre
-   o histórico completo das suas perguntas anteriores (a conversa persiste
-   entre sessões — não há "novo chat", é uma única conversa contínua).
-3. Cada pergunta nova é resolvida por esta ordem, parando na primeira que
-   der resposta:
-   1. **Histórico do próprio cliente** — já perguntou algo parecido antes?
-      Reutiliza essa resposta em vez de repetir todo o processo.
-   2. **Contexto do site da Vértice** — a base de conhecimento interna tem
-      resposta?
-   3. **LLM** — Gemini, Anthropic Claude ou OpenAI, à escolha, trocável por
-      variável de ambiente sem alterar código.
-4. Sempre que é necessário recorrer à LLM (ou seja, nem o histórico nem a
-   base de conhecimento tinham resposta), é aberto automaticamente um
-   **ticket para os devs**.
-5. O cliente é acompanhado por **email** (Resend) e, opcionalmente,
-   **WhatsApp** (Twilio) sempre que o ticket é criado ou resolvido.
+O sistema disponibiliza uma experiência de suporte baseada em conversação, com histórico persistente, base de conhecimento interna e integração com diferentes fornecedores de **LLM**. Quando uma questão não pode ser resolvida automaticamente, é criado um ticket para a equipa de desenvolvimento.
 
-## Stack (hoje) — e por que não fica presa a ela
+---
 
-- **Next.js 14** (App Router) + **TypeScript** + **Tailwind CSS**
-- **Supabase** (Postgres + Auth) — Vercel para deploy
-- LLM: **Gemini** por omissão, com **Anthropic Claude** e **OpenAI** disponíveis
-- Email: **Resend** · WhatsApp: **Twilio**
+## Funcionalidades
 
-Esta é a stack escolhida *hoje*, mas o código está organizado para que
-**nenhuma destas escolhas fique espalhada pela aplicação**. Ver secção
-"Arquitetura" abaixo — é o que torna trivial, no futuro, trocar de
-framework, de base de dados ou de fornecedor de LLM/notificações.
+* Autenticação de clientes através de credenciais criadas por um administrador.
+* Chat de suporte com experiência semelhante ao ChatGPT.
+* Histórico completo e persistente das conversas.
+* Pesquisa automática no histórico do próprio cliente.
+* Consulta da base de conhecimento interna.
+* Integração com múltiplos fornecedores de LLM:
 
-## Arquitetura: núcleo isolado de frameworks (ports & adapters)
+  * Gemini
+  * Anthropic Claude
+  * OpenAI
+* Criação automática de tickets quando é necessária intervenção dos developers.
+* Gestão de clientes, developers e administradores.
+* Notificações por email através do Resend.
+* Notificações opcionais por WhatsApp através do Twilio.
+* Controlo de acesso baseado em papéis:
 
+  * `client`
+  * `dev`
+  * `admin`
+* Protecções de segurança ao nível da aplicação e da base de dados.
+
+O fluxo de resolução segue uma ordem definida, terminando assim que é encontrada uma resposta:
+
+```text
+Pergunta do cliente
+        │
+        ▼
+Histórico do cliente
+        │
+   encontrou resposta?
+      /       \
+    SIM       NÃO
+    │          │
+    ▼          ▼
+ Resposta   Base de conhecimento
+                │
+           encontrou resposta?
+              /       \
+            SIM       NÃO
+            │          │
+            ▼          ▼
+         Resposta      LLM
+                         │
+                         ▼
+                    Criar ticket
 ```
+
+---
+
+## Stack
+
+### Aplicação
+
+* **Next.js 14**
+* **React**
+* **TypeScript**
+* **Tailwind CSS**
+* **App Router**
+
+### Backend e dados
+
+* **Supabase**
+* **PostgreSQL**
+* **Supabase Auth**
+* **Row Level Security (RLS)**
+
+### Inteligência Artificial
+
+* **Gemini** — fornecedor predefinido
+* **Anthropic Claude**
+* **OpenAI**
+
+O fornecedor pode ser alterado através de uma variável de ambiente, sem necessidade de alterar a lógica de negócio.
+
+### Notificações
+
+* **Resend** — email
+* **Twilio** — WhatsApp
+
+### Deploy
+
+* **Vercel**
+
+---
+
+## Arquitectura
+
+A aplicação segue uma arquitectura baseada em **Ports & Adapters**, mantendo a lógica de negócio independente da framework, da base de dados e dos fornecedores externos.
+
+```text
 src/
   core/                    ← lógica de negócio PURA. Zero imports de Next.js,
     types.ts                 Supabase, ou qualquer SDK. Só TypeScript simples.
@@ -265,16 +324,31 @@ projeto Supabase.
 cp .env.example .env.local
 ```
 
-Preencher `.env.local` com as chaves reais. Para a LLM, só é preciso
-preencher a chave do fornecedor escolhido em `LLM_PROVIDER` (por omissão
-`gemini`) — ver comentários em [.env.example](.env.example) para onde obter
-cada chave (Supabase, Gemini/Anthropic/OpenAI, Resend, Twilio, Upstash
-opcional).
+Preencher as variáveis com as credenciais reais.
 
-### 3. Instalar e correr localmente
+O fornecedor de LLM é definido através de:
+
+```env
+LLM_PROVIDER=gemini
+```
+
+As restantes variáveis encontram-se documentadas no `.env.example`.
+
+> **Importante:** nunca adicionar `.env.local` ao repositório Git.
+
+---
+
+## Execução local
+
+Instalar as dependências:
 
 ```bash
 npm install
+```
+
+Iniciar o servidor de desenvolvimento:
+
+```bash
 npm run dev
 ```
 
