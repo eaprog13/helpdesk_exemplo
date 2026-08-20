@@ -1,7 +1,8 @@
 import { randomBytes } from "crypto";
 import type { Dependencias } from "@/core/deps";
-import type { Perfil, TipoSite } from "@/core/types";
+import type { Departamento, Perfil, TipoSite } from "@/core/types";
 import type { FicheiroParaCarregar } from "@/core/ports/storage";
+import { ErroNaoEncontrado } from "./chatService";
 
 // Mesmos limites definidos no bucket "logos" (supabase/schema.sql) — validar
 // também aqui dá um erro claro e imediato, em vez de esperar pela rejeição
@@ -16,7 +17,9 @@ export const TAMANHO_MAXIMO_LOGO = 2 * 1024 * 1024; // 2MB
 
 export class TipoLogoInvalidoError extends Error {}
 
-function gerarPalavraPasseTemporaria() {
+// Partilhado com teamService.ts (mesma necessidade: password forte e
+// imprevisível, nunca escolhida por humano, para uma conta nova).
+export function gerarPalavraPasseTemporaria() {
   // 16 bytes aleatórios → password forte e imprevisível, nunca escolhida por humano.
   return randomBytes(12).toString("base64url");
 }
@@ -26,7 +29,10 @@ export interface DadosCriacaoCliente {
   nomeCompleto: string;
   nomeEmpresa: string;
   telefone?: string | null;
-  tipoSite: TipoSite;
+  /** Serviço(s) que o cliente tem contratado — obrigatório, ver Perfil.site_type em core/types.ts. */
+  tiposSite: TipoSite[];
+  /** Organização interna do admin — etiqueta opcional, ver Departamento em core/types.ts. */
+  departamentos?: Departamento[];
 }
 
 /**
@@ -46,8 +52,18 @@ export async function criarCliente(dependencias: Dependencias, dados: DadosCriac
       full_name: dados.nomeCompleto,
       company_name: dados.nomeEmpresa,
       phone: dados.telefone ?? null,
-      site_type: dados.tipoSite,
     },
+  });
+
+  // O trigger "handle_new_user" (supabase/schema.sql) não conhece
+  // "department" nem "site_type" — só lê role/full_name/company_name/phone
+  // de raw_user_meta_data — por isso esta segunda chamada. site_type é
+  // sempre definido (obrigatório); department só quando há algo para
+  // gravar (evita uma escrita vazia no caso comum de um cliente sem
+  // nenhum departamento assinalado, que já nasce com '{}' por omissão).
+  await dependencias.perfis.atualizar(criado.id, {
+    site_type: dados.tiposSite,
+    ...(dados.departamentos && dados.departamentos.length > 0 ? { department: dados.departamentos } : {}),
   });
 
   const resultadoEmail = await dependencias.email.enviarCredenciais(
@@ -69,6 +85,44 @@ export async function criarCliente(dependencias: Dependencias, dados: DadosCriac
 
 export async function listarClientes(dependencias: Dependencias): Promise<Perfil[]> {
   return dependencias.perfis.listarClientes();
+}
+
+/**
+ * Corrige os departamentos (etiqueta organizacional, ver Departamento em
+ * core/types.ts) de um cliente já existente — a criação só permitia
+ * defini-los uma vez, na altura de criarCliente().
+ */
+export async function atualizarDepartamentosCliente(
+  dependencias: Dependencias,
+  idCliente: string,
+  departamentos: Departamento[]
+): Promise<Perfil> {
+  const clienteAtual = await dependencias.perfis.obterPorId(idCliente);
+  if (!clienteAtual || clienteAtual.role !== "client") {
+    throw new ErroNaoEncontrado("Cliente não encontrado.");
+  }
+  await dependencias.perfis.atualizar(idCliente, { department: departamentos });
+  return { ...clienteAtual, department: departamentos };
+}
+
+/**
+ * Corrige o(s) serviço(s) (site_type, ver core/types.ts) de um cliente já
+ * existente — a criação só permitia defini-los uma vez, na altura de
+ * criarCliente(). Ao contrário do departamento, nunca fica vazio — a rota
+ * (esquemaAlteracoes, ver api/admin/clients/[id]/route.ts) já exige pelo
+ * menos um valor antes de chegar aqui.
+ */
+export async function atualizarServicosCliente(
+  dependencias: Dependencias,
+  idCliente: string,
+  tiposSite: TipoSite[]
+): Promise<Perfil> {
+  const clienteAtual = await dependencias.perfis.obterPorId(idCliente);
+  if (!clienteAtual || clienteAtual.role !== "client") {
+    throw new ErroNaoEncontrado("Cliente não encontrado.");
+  }
+  await dependencias.perfis.atualizar(idCliente, { site_type: tiposSite });
+  return { ...clienteAtual, site_type: tiposSite };
 }
 
 /**

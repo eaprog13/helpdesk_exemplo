@@ -13,8 +13,9 @@ export async function OPTIONS(pedido: Request) {
  * POST /api/admin/clients/:id/logo — apenas admin/dev. Recebe multipart/form-data
  * com um campo "ficheiro" (imagem) e substitui o logótipo desse cliente.
  */
-export async function POST(pedido: Request, { params }: { params: { id: string } }) {
+export async function POST(pedido: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const { dependencias } = await exigirPapel(["admin", "dev"]);
 
     const formulario = await pedido.formData();
@@ -24,7 +25,7 @@ export async function POST(pedido: Request, { params }: { params: { id: string }
     }
 
     const conteudo = Buffer.from(await ficheiro.arrayBuffer());
-    const logoUrl = await atualizarLogotipoCliente(dependencias, params.id, {
+    const logoUrl = await atualizarLogotipoCliente(dependencias, id, {
       conteudo,
       tipoConteudo: ficheiro.type,
     });

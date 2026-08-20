@@ -5,6 +5,7 @@ import { BolhaMensagem } from "./MessageBubble";
 import { IndicadorEscrita } from "./TypingIndicator";
 import { AvisoTicket } from "./TicketBanner";
 import { CampoChat } from "./ChatInput";
+import { CartoesSugestoesRapidas } from "./QuickActionCards";
 import type { ResultadoPergunta, Mensagem, Ticket } from "@/core/types";
 
 export function JanelaChat({ nomeCompleto }: { nomeCompleto?: string }) {
@@ -105,6 +106,7 @@ export function JanelaChat({ nomeCompleto }: { nomeCompleto?: string }) {
               <p className="mt-1 text-sm text-ink-400">
                 Pergunte-nos algo sobre o seu site institucional ou loja online.
               </p>
+              <CartoesSugestoesRapidas aoEscolher={setEntrada} />
             </div>
           )}
 

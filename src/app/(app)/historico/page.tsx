@@ -1,11 +1,29 @@
 import Link from "next/link";
 import { exigirUtilizador } from "@/lib/auth/session";
 import { listarConversas } from "@/core/services/chatService";
+import { listarTickets } from "@/core/services/ticketService";
 import { Cartao } from "@/components/ui/Card";
+import { Distintivo } from "@/components/ui/Badge";
+import { formatarTituloConversa } from "@/lib/format/dataConversa";
+import { estadoConversa } from "@/lib/format/estadoConversa";
+import type { Ticket } from "@/core/types";
 
 export default async function PaginaHistoricoCliente() {
   const { perfil, dependencias } = await exigirUtilizador();
-  const conversas = await listarConversas(dependencias, perfil);
+  const [conversas, tickets] = await Promise.all([
+    listarConversas(dependencias, perfil),
+    listarTickets(dependencias, perfil),
+  ]);
+
+  // Agrupar os tickets do cliente por conversa, para dar a cada cartão o
+  // seu estado (ver estadoConversa) sem precisar de uma pesquisa por
+  // conversa à base de dados.
+  const ticketsPorConversa = new Map<string, Ticket[]>();
+  for (const ticket of tickets) {
+    const lista = ticketsPorConversa.get(ticket.conversation_id) ?? [];
+    lista.push(ticket);
+    ticketsPorConversa.set(ticket.conversation_id, lista);
+  }
 
   return (
     <div className="mx-auto h-full max-w-3xl overflow-y-auto px-6 py-6">
@@ -22,11 +40,11 @@ export default async function PaginaHistoricoCliente() {
         {conversas.map((conversa, i) => (
           <Link key={conversa.id} href={`/historico/${conversa.id}`} className="block">
             <Cartao
-              className="animate-entrada p-4 transition-[box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-md"
+              className="animate-entrada flex items-center justify-between gap-3 p-4 transition-[box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-md"
               style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}
             >
-              <p className="text-sm font-medium text-ink">{conversa.subject ?? "Conversa"}</p>
-              <p className="mt-1 text-xs text-ink-300">{new Date(conversa.created_at).toLocaleString("pt-PT")}</p>
+              <span className="text-sm font-medium text-ink">{formatarTituloConversa(conversa.created_at)}</span>
+              <Distintivo value={estadoConversa(ticketsPorConversa.get(conversa.id) ?? [])} />
             </Cartao>
           </Link>
         ))}

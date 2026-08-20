@@ -7,8 +7,8 @@ import { cookies } from "next/headers";
  * pelo Supabase Auth — o JWT de sessão nunca fica acessível a JavaScript no
  * browser (mitiga roubo de token via XSS).
  */
-export function criarClienteServidor() {
-  const armazemCookies = cookies();
+export async function criarClienteServidor() {
+  const armazemCookies = await cookies();
 
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

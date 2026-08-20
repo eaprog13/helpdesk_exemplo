@@ -9,6 +9,7 @@ import { RepositorioMensagemSupabase } from "@/adapters/supabase/messageReposito
 import { RepositorioBaseConhecimentoSupabase } from "@/adapters/supabase/knowledgeBaseRepository";
 import { RepositorioTicketSupabase } from "@/adapters/supabase/ticketRepository";
 import { RepositorioAtualizacaoTicketSupabase } from "@/adapters/supabase/ticketUpdateRepository";
+import { RepositorioAnexoTicketSupabase } from "@/adapters/supabase/ticketAttachmentRepository";
 import { RepositorioRegistoNotificacaoSupabase } from "@/adapters/supabase/notificationLogRepository";
 import { FornecedorGestaoIdentidadeSupabase } from "@/adapters/supabase/identityAdminProvider";
 import { RepositorioArmazenamentoSupabase } from "@/adapters/supabase/storageRepository";
@@ -85,6 +86,7 @@ export function obterContentor(): Dependencias {
     baseConhecimento: new RepositorioBaseConhecimentoSupabase(bd),
     tickets: new RepositorioTicketSupabase(bd),
     atualizacoesTicket: new RepositorioAtualizacaoTicketSupabase(bd),
+    anexosTicket: new RepositorioAnexoTicketSupabase(bd),
     registoNotificacoes: new RepositorioRegistoNotificacaoSupabase(bd),
     identidade: new FornecedorGestaoIdentidadeSupabase(bd.auth.admin),
     armazenamento: new RepositorioArmazenamentoSupabase(bd),
@@ -100,6 +102,7 @@ export function obterContentor(): Dependencias {
       process.env.TWILIO_WHATSAPP_FROM ?? "",
       process.env.WHATSAPP_NOTIFICATIONS_ENABLED === "true"
     ),
+    respostaHumanizadaAtiva: process.env.RESPOSTA_HUMANIZADA_ATIVA === "true",
   };
 
   return dependenciasEmCache;

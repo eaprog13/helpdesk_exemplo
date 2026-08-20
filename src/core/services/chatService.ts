@@ -11,9 +11,25 @@ import type { Conversa, Mensagem, ResultadoPergunta, UtilizadorAutenticado, Perf
 // equivalente que o adaptador de BD escolhido devolver); histórico exige
 // uma correspondência mais próxima do que a KB, porque estamos a reutilizar
 // uma resposta já dada sem a rever de novo.
-const LIMIAR_RELEVANCIA_HISTORICO = 0.25;
+//
+// Recalibrados a 2026-08-19, depois de search_knowledge_base/
+// search_client_history passarem a devolver rank × cobertura (ver
+// supabase/migration_flexibilidade_pesquisa.sql, v2) — testados
+// diretamente ao RPC com um conjunto de perguntas reais e adversariais:
+//   • correspondências genuínas (tópico 1:1 com um artigo): rank 0.6–0.83
+//     (ex.: "loja online" → 0.83; "prazo de entrega de projeto" → 0.75)
+//   • correspondências parciais/ambíguas (só partilham uma categoria
+//     genérica, ex. "site institucional", sem a KB ter resposta real à
+//     pergunta): rank ~0.3–0.35 — devem continuar a cair para a LLM
+//   • coincidências sem relação nenhuma (ex. perguntas sobre Bitcoin, CEO,
+//     estacionamento — só correspondem por "Vértice Digital" aparecer no
+//     título de quase todos os artigos): rank ~0.07–0.46, nunca acima
+// 0.5 fica acima de toda a coincidência observada e abaixo de toda a
+// correspondência genuína testada — reavaliar se a KB crescer muito ou se
+// aparecerem falsos positivos/negativos reais em produção.
+const LIMIAR_RELEVANCIA_HISTORICO = 0.55;
 const MAX_RESULTADOS_HISTORICO = 3;
-const LIMIAR_RELEVANCIA_BASE_CONHECIMENTO = 0.15;
+const LIMIAR_RELEVANCIA_BASE_CONHECIMENTO = 0.5;
 const MAX_RESULTADOS_BASE_CONHECIMENTO = 3;
 
 export interface DadosPergunta {
@@ -25,6 +41,33 @@ export interface DadosPergunta {
 
 export class ErroAcessoNegado extends Error {}
 export class ErroNaoEncontrado extends Error {}
+
+/**
+ * Passa uma resposta já correta (histórico ou base de conhecimento) pela
+ * LLM para soar mais natural à pergunta concreta que foi feita — sem
+ * mudar nenhum facto (ver FornecedorLlm.humanizarResposta). Só ativo com
+ * Dependencias.respostaHumanizadaAtiva (RESPOSTA_HUMANIZADA_ATIVA no
+ * .env — desligado por omissão): ainda estamos a validar os limiares de
+ * deteção de contexto acima, e uma pergunta mais elaborada ou com
+ * palavras fora do vocabulário habitual pode confundir esta reescrita.
+ * Se a chamada falhar por qualquer motivo, devolve sempre a resposta
+ * original em vez de rebentar o pedido — o cliente fica sem a
+ * "lapidação", nunca sem resposta nenhuma.
+ */
+async function lapidarSeAtivo(
+  dependencias: Dependencias,
+  pergunta: string,
+  respostaBase: string,
+  nomeEmpresa: string | null
+): Promise<string> {
+  if (!dependencias.respostaHumanizadaAtiva) return respostaBase;
+  try {
+    return await dependencias.llm.humanizarResposta({ pergunta, respostaBase, nomeEmpresa });
+  } catch (erro) {
+    console.error("[lapidarSeAtivo] falha ao lapidar a resposta, a devolver a original:", erro);
+    return respostaBase;
+  }
+}
 
 /**
  * Caso de uso central: o cliente faz uma pergunta.
@@ -79,8 +122,9 @@ export async function fazerPergunta(dependencias: Dependencias, dados: DadosPerg
 
   if (correspondenciaHistoricoComConfianca && melhorCorrespondenciaHistorico?.resposta) {
     // Já respondemos a algo parecido a este cliente — reutiliza essa resposta,
-    // sem voltar a pesquisar a KB nem a chamar a LLM.
-    conteudoResposta = melhorCorrespondenciaHistorico.resposta;
+    // sem voltar a pesquisar a KB nem a chamar a LLM (a lapidação abaixo é
+    // só de estilo, não uma nova pesquisa).
+    conteudoResposta = await lapidarSeAtivo(dependencias, pergunta, melhorCorrespondenciaHistorico.resposta, perfil.company_name);
     origem = "history";
   } else {
     // ── 4) Contexto do site da Vértice: pesquisar a base de conhecimento ────
@@ -95,8 +139,9 @@ export async function fazerPergunta(dependencias: Dependencias, dados: DadosPerg
       melhorCorrespondenciaBaseConhecimento.rank >= LIMIAR_RELEVANCIA_BASE_CONHECIMENTO;
 
     if (correspondenciaBaseConhecimentoComConfianca && melhorCorrespondenciaBaseConhecimento) {
-      // Resposta encontrada no contexto interno — sem necessidade de LLM nem ticket.
-      conteudoResposta = melhorCorrespondenciaBaseConhecimento.content;
+      // Resposta encontrada no contexto interno — sem necessidade de LLM
+      // para a RESPONDER (só, opcionalmente, para a lapidar) nem ticket.
+      conteudoResposta = await lapidarSeAtivo(dependencias, pergunta, melhorCorrespondenciaBaseConhecimento.content, perfil.company_name);
       origem = "knowledge_base";
       idReferenciaBaseConhecimento = melhorCorrespondenciaBaseConhecimento.id;
     } else {
@@ -105,7 +150,7 @@ export async function fazerPergunta(dependencias: Dependencias, dados: DadosPerg
         pergunta,
         contextoRelacionado: correspondenciasBaseConhecimento.map((m) => ({ titulo: m.title, conteudo: m.content })),
         nomeEmpresa: perfil.company_name,
-        tipoSite: perfil.site_type,
+        tiposSite: perfil.site_type,
       });
       origem = "llm";
     }
@@ -121,6 +166,21 @@ export async function fazerPergunta(dependencias: Dependencias, dados: DadosPerg
 
   // ── 6) Sempre que se recorreu à LLM, abrir ticket para os devs ─────────
   if (origem === "llm") {
+    // Departamento fica deliberadamente por definir (null → "Por triar",
+    // ver core/services/ticketService.ts). Chegar aqui já significa que
+    // nem o histórico nem a KB tiveram confiança suficiente para
+    // responder (ver os limiares acima) — ou seja, os candidatos da
+    // pesquisa à KB que ainda restam são exatamente a zona onde, segundo a
+    // calibração destes limiares, correspondências genuínas parciais
+    // (rank ~0.3–0.35) e coincidências irrelevantes (rank até ~0.46, ex.:
+    // uma pergunta sobre Bitcoin "bater" com um artigo só por
+    // partilhar "Vértice Digital") se misturam sem uma fronteira limpa.
+    // Um limiar mais baixo só para classificar departamento arriscava
+    // exatamente o cenário que se quer evitar: encaminhar um problema
+    // técnico para o departamento errado com aparência de confiança. Fica
+    // para um admin triar à mão (ou, no futuro, uma classificação da
+    // própria LLM já chamada aqui — sinal semântico, não só correspondência
+    // de palavras — mas isso é trabalho novo a validar, não este limiar.)
     ticket = await dependencias.tickets.criar({
       idConversa: conversa.id,
       idMensagem: mensagemUtilizador.id,
@@ -128,6 +188,7 @@ export async function fazerPergunta(dependencias: Dependencias, dados: DadosPerg
       titulo: pergunta.slice(0, 120),
       pergunta,
       respostaLlm: conteudoResposta,
+      departamento: null,
     });
 
     // ── 7) Acompanhamento do cliente por email/WhatsApp ────────────────────
@@ -139,12 +200,15 @@ export async function fazerPergunta(dependencias: Dependencias, dados: DadosPerg
 
 /**
  * Orquestra o envio de notificações (email sempre; WhatsApp se o cliente
- * tiver telefone associado) e regista cada tentativa para auditoria.
- * Partilhado entre chatService (ticket criado) e ticketService (resolvido).
+ * tiver telefone associado — exceto em "ticket_updated", só email por
+ * agora: mensagem genérica de "já assumido", sem WhatsApp ainda ligado a
+ * ela em core/ports/notifications.ts) e regista cada tentativa para
+ * auditoria. Partilhado entre chatService (ticket criado) e ticketService
+ * (assumido/resolvido).
  */
 export async function notificarEventoTicket(
   dependencias: Dependencias,
-  evento: "ticket_created" | "ticket_resolved",
+  evento: "ticket_created" | "ticket_updated" | "ticket_resolved",
   perfil: Pick<Perfil, "id" | "full_name" | "phone">,
   email: string,
   ticket: NonNullable<ResultadoPergunta["ticket"]>,
@@ -153,7 +217,9 @@ export async function notificarEventoTicket(
   const resultadoEmail =
     evento === "ticket_created"
       ? await dependencias.email.enviarTicketCriado(email, perfil.full_name, ticket)
-      : await dependencias.email.enviarTicketResolvido(email, perfil.full_name, ticket, notaResolucao ?? "");
+      : evento === "ticket_updated"
+        ? await dependencias.email.enviarTicketAssumido(email, perfil.full_name, ticket)
+        : await dependencias.email.enviarTicketResolvido(email, perfil.full_name, ticket, notaResolucao ?? "");
 
   await dependencias.registoNotificacoes.registar({
     idCliente: perfil.id,
@@ -164,7 +230,7 @@ export async function notificarEventoTicket(
     erro: resultadoEmail.erro,
   });
 
-  if (perfil.phone) {
+  if (perfil.phone && evento !== "ticket_updated") {
     const resultadoWhatsApp =
       evento === "ticket_created"
         ? await dependencias.whatsapp.enviarTicketCriado(perfil.phone, perfil.full_name, ticket)

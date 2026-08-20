@@ -1,7 +1,12 @@
 import "server-only";
 import OpenAI from "openai";
-import type { PedidoRespostaLlm, FornecedorLlm } from "@/core/ports/llm";
-import { PROMPT_SISTEMA, construirPromptUtilizador } from "./prompt";
+import type { PedidoRespostaLlm, PedidoHumanizacaoResposta, FornecedorLlm } from "@/core/ports/llm";
+import {
+  PROMPT_SISTEMA,
+  construirPromptUtilizador,
+  PROMPT_SISTEMA_HUMANIZACAO,
+  construirPromptUtilizadorHumanizacao,
+} from "./prompt";
 
 export class FornecedorLlmOpenAi implements FornecedorLlm {
   private cliente: OpenAI | null = null;
@@ -22,6 +27,22 @@ export class FornecedorLlmOpenAi implements FornecedorLlm {
       messages: [
         { role: "system", content: PROMPT_SISTEMA },
         { role: "user", content: construirPromptUtilizador(pedido) },
+      ],
+    });
+
+    const resposta = conclusao.choices[0]?.message?.content;
+    if (!resposta) throw new Error("A OpenAI não devolveu uma resposta de texto.");
+    return resposta.trim();
+  }
+
+  async humanizarResposta(pedido: PedidoHumanizacaoResposta): Promise<string> {
+    const cliente = this.obterCliente();
+    const conclusao = await cliente.chat.completions.create({
+      model: this.modelo,
+      max_tokens: 1024,
+      messages: [
+        { role: "system", content: PROMPT_SISTEMA_HUMANIZACAO },
+        { role: "user", content: construirPromptUtilizadorHumanizacao(pedido) },
       ],
     });
 

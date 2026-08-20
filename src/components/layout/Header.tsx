@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { clsx } from "clsx";
 import { criarClienteSupabase } from "@/lib/supabase/client";
 import { Botao } from "@/components/ui/Button";
+import { BotaoAbrirTicket } from "@/components/ticket/OpenTicketButton";
 
 interface PropriedadesCabecalho {
   nomeCompleto: string;
@@ -11,9 +13,9 @@ interface PropriedadesCabecalho {
   /** Logótipo próprio do cliente (empresa), se tiver sido carregado pelo admin. Sem isto, mostra o "V" da Vértice. */
   logoUrl?: string | null;
   /**
-   * Mostra as ligações entre "Falar connosco", "Os meus pedidos" e
-   * "Histórico" — sempre as duas secções onde NÃO se está, para nunca ficar
-   * sem forma de voltar a alguma (só faz sentido na área do cliente).
+   * Mostra as abas "Falar connosco", "Os meus pedidos" e "Histórico" —
+   * sempre as 3, com a atual destacada, para o cliente nunca perder a
+   * noção de onde está (só faz sentido na área do cliente).
    */
   mostrarNavegacaoCliente?: boolean;
 }
@@ -28,10 +30,6 @@ export function Cabecalho({ nomeCompleto, nomeEmpresa, logoUrl, mostrarNavegacao
   const router = useRouter();
   const caminhoAtual = usePathname();
 
-  const ligacoesSecundarias = mostrarNavegacaoCliente
-    ? SECCOES_CLIENTE.filter((seccao) => !caminhoAtual?.startsWith(seccao.prefixo))
-    : [];
-
   async function terminarSessao() {
     const supabase = criarClienteSupabase();
     await supabase.auth.signOut();
@@ -40,7 +38,7 @@ export function Cabecalho({ nomeCompleto, nomeEmpresa, logoUrl, mostrarNavegacao
   }
 
   return (
-    <header className="flex items-center justify-between border-b border-ink-100 bg-surface-card px-6 py-3">
+    <header className="flex items-center justify-between gap-4 border-b border-ink-100 bg-surface-card px-6 py-3">
       <div className="flex items-center gap-3">
         {logoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- URL dinâmico (Supabase Storage), fora do domínio conhecido em build-time
@@ -57,16 +55,40 @@ export function Cabecalho({ nomeCompleto, nomeEmpresa, logoUrl, mostrarNavegacao
           {nomeEmpresa && <p className="text-xs leading-tight text-ink-300">{nomeEmpresa}</p>}
         </div>
       </div>
-      <div className="flex items-center gap-4">
-        {ligacoesSecundarias.map((ligacao) => (
-          <Link
-            key={ligacao.href}
-            href={ligacao.href}
-            className="text-xs text-ink-400 transition-colors duration-150 hover:text-ink hover:underline"
-          >
-            {ligacao.rotulo}
-          </Link>
-        ))}
+
+      {mostrarNavegacaoCliente && (
+        <nav className="flex items-center gap-1">
+          {SECCOES_CLIENTE.map((seccao) => {
+            const ativo = caminhoAtual === seccao.prefixo || caminhoAtual?.startsWith(`${seccao.prefixo}/`);
+            return (
+              <Link
+                key={seccao.href}
+                href={seccao.href}
+                aria-current={ativo ? "page" : undefined}
+                className={clsx(
+                  "rounded-lg px-3 py-1.5 text-sm font-medium transition-colors duration-150",
+                  ativo ? "bg-accent-light text-accent-hover" : "text-ink-400 hover:bg-surface-muted hover:text-ink"
+                )}
+              >
+                {seccao.rotulo}
+              </Link>
+            );
+          })}
+        </nav>
+      )}
+
+      <div className="flex items-center gap-2">
+        {mostrarNavegacaoCliente && <BotaoAbrirTicket />}
+        {/* Mesma página em /change-password serve o 1º acesso obrigatório
+            e esta alteração voluntária — ver comentário lá. Visível para
+            os 3 papéis (cliente, dev, admin): todos autenticam da mesma
+            forma, todos precisam de poder trocar a password sem depender
+            de um admin. */}
+        <Link href="/change-password">
+          <Botao variant="ghost" size="sm" type="button">
+            Alterar password
+          </Botao>
+        </Link>
         <Botao variant="ghost" size="sm" onClick={terminarSessao}>
           Terminar sessão
         </Botao>

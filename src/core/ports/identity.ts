@@ -18,7 +18,6 @@ export interface DadosCriacaoUtilizador {
     full_name: string;
     company_name?: string | null;
     phone?: string | null;
-    site_type?: string | null;
   };
 }
 

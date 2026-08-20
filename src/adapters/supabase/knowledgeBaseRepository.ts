@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CorrespondenciaBaseConhecimento, RepositorioBaseConhecimento } from "@/core/ports/repositories";
 import type { EntradaBaseConhecimento, TipoSite } from "@/core/types";
+import { TituloDuplicadoError } from "@/core/services/knowledgeBaseService";
 
 /**
  * Pesquisa full-text (Postgres tsvector, dicionário "portuguese") na base de
@@ -15,12 +16,12 @@ export class RepositorioBaseConhecimentoSupabase implements RepositorioBaseConhe
 
   async pesquisar(
     pergunta: string,
-    tipoSite: TipoSite | null,
+    tiposSite: TipoSite[],
     maxResultados: number
   ): Promise<CorrespondenciaBaseConhecimento[]> {
     const { data, error } = await this.bd.rpc("search_knowledge_base", {
       query_text: pergunta,
-      filter_site_type: tipoSite ?? null,
+      filter_site_types: tiposSite.length > 0 ? tiposSite : null,
       max_results: maxResultados,
     });
     if (error) throw new Error(`[baseConhecimento.pesquisar] ${error.message}`);
@@ -46,9 +47,13 @@ export class RepositorioBaseConhecimentoSupabase implements RepositorioBaseConhe
         tags: entrada.etiquetas,
         is_published: entrada.publicado,
         created_by: entrada.criadoPor,
+        department: entrada.departamento ?? null,
       })
       .select("*")
       .single();
+    if (error?.code === "23505") {
+      throw new TituloDuplicadoError(`Já existe uma entrada da Base de Conhecimento com o título "${entrada.titulo}".`);
+    }
     if (error || !data) throw new Error(`[baseConhecimento.criar] ${error?.message}`);
     return data;
   }
@@ -63,6 +68,7 @@ export class RepositorioBaseConhecimentoSupabase implements RepositorioBaseConhe
     if (alteracoes.tipoSite !== undefined) payload.site_type = alteracoes.tipoSite;
     if (alteracoes.etiquetas !== undefined) payload.tags = alteracoes.etiquetas;
     if (alteracoes.publicado !== undefined) payload.is_published = alteracoes.publicado;
+    if (alteracoes.departamento !== undefined) payload.department = alteracoes.departamento;
 
     const { data, error } = await this.bd
       .from("knowledge_base")
@@ -70,6 +76,9 @@ export class RepositorioBaseConhecimentoSupabase implements RepositorioBaseConhe
       .eq("id", id)
       .select("*")
       .maybeSingle();
+    if (error?.code === "23505") {
+      throw new TituloDuplicadoError(`Já existe uma entrada da Base de Conhecimento com o título "${alteracoes.titulo}".`);
+    }
     if (error) throw new Error(`[baseConhecimento.atualizar] ${error.message}`);
     return data;
   }

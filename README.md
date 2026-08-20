@@ -99,251 +99,226 @@ A aplicação segue uma arquitectura baseada em **Ports & Adapters**, mantendo a
 
 ```text
 src/
-├── core/
-│   ├── types.ts
-│   ├── deps.ts
-│   ├── ports/
-│   │   ├── repositories.ts
-│   │   ├── identity.ts
-│   │   ├── llm.ts
-│   │   └── notifications.ts
-│   └── services/
-│       ├── chatService.ts
-│       ├── ticketService.ts
-│       ├── clientService.ts
-│       ├── knowledgeBaseService.ts
-│       └── authService.ts
-│
-├── adapters/
-│   ├── supabase/
-│   ├── llm/
-│   └── notifications/
-│
-├── composition/
-│   └── container.ts
-│
-├── app/
-│   └── api/
-│
-├── lib/
-│   ├── auth/
-│   └── security/
-│
-└── components/
+  core/                    ← lógica de negócio PURA. Zero imports de Next.js,
+    types.ts                 Supabase, ou qualquer SDK. Só TypeScript simples.
+    deps.ts                  Isto é o que garante a independência de framework/BD.
+    ports/                 ← contratos (interfaces): o que o negócio PRECISA,
+      repositories.ts        não COMO é implementado.
+      identity.ts
+      llm.ts
+      notifications.ts
+    services/               ← casos de uso (regras de negócio): perguntar,
+      chatService.ts          criar/atualizar ticket, criar cliente, gerir KB.
+      ticketService.ts        Só recebem `deps` (as implementações dos ports).
+      clientService.ts        Testáveis sem Next.js, sem Supabase, sem rede.
+      knowledgeBaseService.ts
+      authService.ts
+
+  adapters/                ← implementações concretas dos ports de cima.
+    supabase/                 Hoje: Supabase (Postgres + Auth).
+    llm/                      Hoje: Gemini / Anthropic / OpenAI.
+    notifications/            Hoje: Resend (email) / Twilio (WhatsApp).
+
+  composition/
+    container.ts            ← ÚNICO ficheiro que decide "qual implementação
+                               usar". Para trocar de BD ou de fornecedor,
+                               é aqui (e só aqui) que se troca a instância.
+
+  app/                      ← Next.js: rotas/páginas — camada fina. As rotas
+                               de API só validam o pedido HTTP e chamam
+                               core/services; não têm lógica de negócio.
+  lib/                      ← infraestrutura específica do Next.js: sessão
+                               (cookies), cabeçalhos de segurança, CORS,
+                               rate limit. É o que muda se trocar de framework.
+  components/               ← UI (React/Tailwind).
 ```
 
-### Core
+**O que isto significa na prática:**
 
-A pasta `core/` contém a lógica de negócio da aplicação.
+- **Trocar de LLM** (ex.: Gemini → outro): mudar `LLM_PROVIDER` no
+  `.env` — zero alterações de código. Para adicionar um fornecedor novo que
+  ainda não exista, escrever uma classe em `src/adapters/llm/` que
+  implemente `LlmProvider` (ver `src/core/ports/llm.ts`) e adicioná-la ao
+  `switch` em `src/composition/container.ts`.
+- **Trocar de base de dados** (Supabase → Postgres direto, PlanetScale,
+  Firebase, etc.): escrever novas classes em `src/adapters/<novo-bd>/` que
+  implementem as interfaces de `src/core/ports/repositories.ts`, e trocar
+  as instâncias em `src/composition/container.ts`. **Nada em `core/` ou nas
+  rotas muda.**
+- **Trocar de framework web** (Next.js → Express, Fastify, Remix, etc.): só
+  se reescreve a camada fina em `src/app/api/*` (que hoje só faz
+  `parse → chamar core/services → formatar resposta`) e `src/lib/auth/session.ts`
+  (a única peça que obrigatoriamente conhece "cookies/pedido HTTP" — isto é
+  inevitável em qualquer framework, mas fica isolado a um único ficheiro).
+  Toda a lógica de negócio em `core/` seria reaproveitada sem alterações.
+  (A interface React/Tailwind em si é sempre específica da tecnologia de UI
+  escolhida — isso não é algo que se consiga tornar "framework-agnóstico"
+  em nenhuma stack, é inerente a ter uma UI.)
 
-Não depende directamente de:
+## Fluxo de um ticket
 
-* Next.js
-* Supabase
-* SDKs externos
-* HTTP
-* Cookies
-* Infraestrutura específica
-
-Os contratos necessários são definidos através de interfaces nos `ports`.
-
-Isto permite testar os casos de uso sem depender de rede, base de dados ou framework web.
-
-### Adapters
-
-Os `adapters/` implementam concretamente os contratos definidos pelo `core`.
-
-Exemplos:
-
-```text
-Supabase
-Gemini
-Anthropic
-OpenAI
-Resend
-Twilio
+```
+aberto ──(dev assume)──▶ em resolução ──(dev entrega resposta)──▶ resolvido
+                              ▲                                       │
+                              └────────(cliente: "falta isto")────────┤
+                                                                       │
+                                                          (cliente: "resolvido") 
+                                                                       ▼
+                                                                    fechado
 ```
 
-### Composition
+- **Aberto** (`open`): criado pelo cliente (via chat → LLM sem resposta, ou
+  diretamente em "Abrir ticket") e atribuído ao departamento certo — ver
+  `escolherDevPorMenorCarga` em [ticketService.ts](src/core/services/ticketService.ts).
+  Sem devs validados nesse departamento, fica sem dev até um admin atribuir
+  à mão.
+- **Em resolução** (`in_progress`): o dev "assume" o ticket (auto-atribui-se
+  se ainda estava sem dev) — botão "Assumir ticket" em `/admin/tickets/:id`.
+- **Resolvido** (`resolved`): o dev entrega a resposta — a nota é sempre
+  entregue ao cliente (por email/WhatsApp) e passa a ser obrigatória para
+  fazer esta transição.
+- **Fechado** (`closed`) ou de volta a **Em resolução**: só o cliente
+  decide, no ecrã do seu pedido — "Confirmar resolução" fecha; "Preciso de
+  mais alguma coisa" devolve ao mesmo dev com uma nota do que falta, e o
+  ciclo repete-se até fechar.
 
-`src/composition/container.ts` é o ponto central onde são escolhidas as implementações concretas.
+Um `dev` só pode seguir este fluxo passo a passo, e só em tickets seus (ou
+por assumir, do seu departamento) — ver `validarTransicaoDev` em
+[ticketService.ts](src/core/services/ticketService.ts). Um `admin` pode
+saltar diretamente para qualquer estado (para corrigir enganos), incluindo
+fechar/reabrir em nome do cliente. A API do cliente
+(`POST /api/tickets/:id/resposta-cliente`) só aceita as duas transições que
+são dele: `resolved → closed` e `resolved → in_progress`.
 
-É, por exemplo, aqui que a aplicação decide qual fornecedor de LLM utilizar.
+A sidebar de um `dev` (`/admin`, layout partilhado com `admin`) reflete este
+fluxo: **Os meus tickets** (atribuídos a mim, qualquer estado), **Fila do
+departamento** (abertos, sem dev, do meu departamento — por agarrar) e
+**Todos os tickets**; a gestão de clientes fica fora da sidebar do dev
+(criar clientes é só de admin — ver `POST /api/admin/clients`).
 
-### App
+## Cores da marca
 
-A camada `app/` contém a integração com o Next.js.
+- Texto/marca: `#09182A`
+- Fundo: neutro claro e profissional (`#F4F6F8`)
+- Acento (CTAs/links): `#0F6E8C`, derivado da cor de marca
 
-As rotas API devem permanecer finas:
+Definidas em [tailwind.config.ts](tailwind.config.ts) como `ink`, `surface` e `accent`.
 
-```text
-Pedido HTTP
-    ↓
-Validar input
-    ↓
-Chamar serviço
-    ↓
-Formatar resposta
-```
+## Segurança implementada
 
-A lógica de negócio permanece no `core/`.
+Como a aplicação corre em ambiente serverless (Vercel), não se usa
+literalmente o middleware "helmet" do Express — o equivalente nativo do
+Next.js é usado nos mesmos pontos:
 
----
+| Proteção | Onde | Ficheiro |
+|---|---|---|
+| Cabeçalhos tipo *helmet* (CSP, HSTS, X-Frame-Options, etc.) | Middleware, em todas as respostas | [middleware.ts](middleware.ts), [src/lib/security/headers.ts](src/lib/security/headers.ts) |
+| CORS explícito por origem | Rotas de API | [src/lib/security/cors.ts](src/lib/security/cors.ts) |
+| Autenticação por JWT | Sessão Supabase Auth, verificada no servidor a cada pedido | [src/lib/auth/session.ts](src/lib/auth/session.ts) |
+| Autorização por papel (client/dev/admin) | `requireRole()` nas rotas sensíveis + regras em `core/services` | [src/lib/auth/session.ts](src/lib/auth/session.ts), [src/core/services/ticketService.ts](src/core/services/ticketService.ts) |
+| Row Level Security (defesa em profundidade a nível da BD) | Todas as tabelas | [supabase/policies.sql](supabase/policies.sql) |
+| Rate limiting | `/api/chat`, `/api/tickets`, criação de clientes | [src/lib/security/rateLimit.ts](src/lib/security/rateLimit.ts) (Upstash, opcional) |
+| Validação de input | Todas as rotas de API | `zod` |
+| Segredos nunca expostos ao browser | Chaves de BD/LLM/Resend/Twilio | `import "server-only"` em todos os adaptadores e serviços do servidor |
+| Password forte obrigatória no 1º acesso | Fluxo de credenciais temporárias | [src/app/change-password/page.tsx](src/app/change-password/page.tsx) |
+| Recuperação de password sem revelar se o email existe | Mesma mensagem de sucesso independentemente do resultado | [src/components/auth/ForgotPasswordForm.tsx](src/components/auth/ForgotPasswordForm.tsx) |
 
-## Independência tecnológica
+### Recuperar password
 
-A arquitectura permite substituir componentes sem reescrever a lógica de negócio.
-
-### Trocar o fornecedor de LLM
-
-Para alterar o fornecedor actualmente configurado, basta alterar:
-
-```env
-LLM_PROVIDER=gemini
-```
-
-Para adicionar um novo fornecedor, é criada uma implementação de `LlmProvider` em:
-
-```text
-src/adapters/llm/
-```
-
-e adicionada ao `container.ts`.
-
-### Trocar a base de dados
-
-A implementação actual utiliza Supabase/PostgreSQL.
-
-Uma futura implementação poderia utilizar outro sistema de persistência através de novos adapters que implementem os contratos existentes em:
-
-```text
-src/core/ports/repositories.ts
-```
-
-O `core/` permanece inalterado.
-
-### Trocar a framework web
-
-A lógica de negócio pode ser reutilizada noutra framework web.
-
-A camada específica de Next.js é mantida isolada, principalmente em:
-
-```text
-src/app/
-src/lib/
-```
-
-A interface React/Tailwind permanece naturalmente dependente das tecnologias utilizadas na camada de apresentação.
-
----
-
-## Segurança
-
-A aplicação implementa várias camadas de protecção.
-
-| Protecção          | Implementação                            |
-| ------------------ | ---------------------------------------- |
-| Security headers   | CSP, HSTS, X-Frame-Options, entre outros |
-| CORS               | Origens explicitamente autorizadas       |
-| Autenticação       | Supabase Auth / JWT                      |
-| Autorização        | Roles `client`, `dev` e `admin`          |
-| Row Level Security | Políticas aplicadas na base de dados     |
-| Rate limiting      | Upstash, opcional                        |
-| Validação          | `zod`                                    |
-| Segredos           | Mantidos exclusivamente no servidor      |
-| Password inicial   | Alteração obrigatória no primeiro acesso |
-
-Os principais pontos de segurança encontram-se em:
-
-```text
-middleware.ts
-src/lib/security/
-src/lib/auth/
-supabase/policies.sql
-```
-
-As chaves privadas e credenciais de serviços externos não são expostas ao browser.
-
----
-
-## Base de conhecimento
-
-A base de conhecimento utiliza pesquisa **full-text** nativa do PostgreSQL através de `tsvector`, com dicionário de pesquisa em português.
-
-A qualidade das respostas automáticas depende directamente da informação existente na `knowledge_base`.
-
-Como evolução futura, a pesquisa poderá utilizar **pgvector** e embeddings para melhorar a capacidade de encontrar respostas semanticamente semelhantes.
-
----
+O cliente pede um link em `/forgot-password` (Supabase Auth envia o email
+via as suas próprias definições de SMTP/template — configurar em
+**Authentication → Email Templates** no painel Supabase). O link volta à
+app em `/api/auth/callback`, que troca o código por uma sessão e reencaminha
+para `/change-password` (o mesmo ecrã já usado no 1º acesso). Para o link
+funcionar, `NEXT_PUBLIC_APP_URL` (ou o domínio real, em produção) tem de
+estar na lista **Authentication → URL Configuration → Redirect URLs** do
+projeto Supabase.
 
 ## Configuração
 
-### Pré-requisitos
+### 1. Supabase
 
-Antes de executar o projecto localmente, é necessário ter:
+1. Criar um projeto em [supabase.com](https://supabase.com).
+2. No **SQL Editor**, correr por ordem: `supabase/schema.sql`,
+   `supabase/policies.sql` e, opcionalmente, `supabase/seed.sql`.
+3. Em **Project Settings → API**, copiar `URL`, `anon public key` e
+   `service_role key` para o `.env.local` (ver secção seguinte).
+4. Criar o primeiro utilizador **admin** manualmente: em
+   **Authentication → Users → Add user**, criar a conta e depois, no SQL
+   Editor, correr:
+   ```sql
+   update public.profiles set role = 'admin', full_name = 'O seu nome'
+   where id = '<uuid do utilizador criado>';
+   ```
+   A partir daqui, esse admin já pode criar os restantes clientes pela
+   interface em `/admin/clients`; para devs, criar o utilizador da mesma
+   forma manual e definir `role = 'dev'` **e** `department` (`'desenvolvimento'`,
+   `'marketing'`, `'design'` ou `'geral'` — sem departamento, esse dev nunca
+   é candidato à atribuição automática de tickets, ver
+   [supabase/migration_adicionar_departamentos.sql](supabase/migration_adicionar_departamentos.sql)):
+   ```sql
+   update public.profiles set role = 'dev', department = 'desenvolvimento', full_name = 'Nome do dev'
+   where id = '<uuid do utilizador criado>';
+   ```
 
-* Node.js
-* npm
-* Conta Supabase
-* Chave de pelo menos um fornecedor de LLM
+> **Se já tinha corrido `schema.sql` antes** desta versão (que acrescentou a
+> pesquisa no histórico do cliente), o `create table if not exists` não
+> atualiza tabelas já existentes — correr também isto uma vez no SQL Editor:
+> ```sql
+> alter table public.messages drop constraint if exists messages_source_check;
+> alter table public.messages
+>   add constraint messages_source_check check (source in ('history', 'knowledge_base', 'llm', 'ticket_ack'));
+> ```
+> (`schema.sql` continua seguro de correr do zero num projeto novo.)
 
-Os serviços opcionais são:
+> **Se já tinha corrido `schema.sql`/o seed antes de 2026-08-19**, correr
+> também [`supabase/migration_flexibilidade_pesquisa.sql`](supabase/migration_flexibilidade_pesquisa.sql)
+> uma vez no SQL Editor: torna a pesquisa (histórico e base de conhecimento)
+> tolerante a perguntas com mais palavras — antes, `plainto_tsquery` exigia
+> que TODAS as palavras da pergunta aparecessem no documento, pelo que
+> perguntas mais longas/naturais (ex.: "prazo de entrega de projeto")
+> podiam falhar onde a versão curta ("projeto entrega") resultava — e
+> remove 11 entradas duplicadas da Base de Conhecimento deixadas por um
+> seed corrido duas vezes. (`schema.sql`/`seed_knowledge_base_institucional.sql`
+> já incluem a correção para instalações novas.)
 
-* Resend
-* Twilio
-* Upstash
+> **Se já tinha corrido `migration_flexibilidade_pesquisa.sql`**, correr
+> também [`supabase/migration_corrigir_double_stemming.sql`](supabase/migration_corrigir_double_stemming.sql):
+> aquela migração convertia o AND de `plainto_tsquery` em OR manipulando o
+> *texto* do tsquery já processado — mas `to_tsquery` volta a aplicar o
+> dicionário 'portuguese' a esse texto, o que "re-stemma" lexemas já
+> stemmed (ex.: "problema" → `problem` → `probl` na 2ª passagem), fazendo
+> certas palavras (comprovado: "problema") não devolverem nenhum resultado
+> mesmo estando literalmente no título de vários artigos. A correção
+> stemma cada palavra uma única vez e combina os resultados como valores
+> `tsquery`, nunca como texto. (`schema.sql` já inclui a correção.)
 
----
+> **Se já tinha corrido `schema.sql` antes de 2026-08-20**, correr também
+> [`supabase/migration_adicionar_departamentos.sql`](supabase/migration_adicionar_departamentos.sql):
+> acrescenta a coluna `department` a `profiles`/`knowledge_base`/`tickets`
+> (base da prioridade Crítica/Alta/Média/Baixa e da atribuição automática
+> de tickets por departamento + carga de trabalho) e classifica os
+> artigos da KB que já existirem. Sem isto, todos os devs/artigos/tickets
+> ficam sem
+> departamento e nenhum ticket é atribuído automaticamente — cai sempre
+> em "Por atribuir". (`schema.sql` e os dois `seed_knowledge_base_*.sql` já
+> incluem isto para instalações novas.)
 
-### 1. Configurar o Supabase
+> **Se já tinha corrido `schema.sql` antes de 2026-08-20**, correr também
+> [`supabase/migration_tipos_site_multiplos.sql`](supabase/migration_tipos_site_multiplos.sql):
+> `site_type` (em `profiles` e `knowledge_base`) passa de valor único
+> (`institutional`/`ecommerce`/`both`) para array de valores
+> (`institutional`/`ecommerce`/`web_app`/`mobile_app`/`other`) — um cliente
+> pode ter mais do que um tipo de produto (ex.: site institucional E loja
+> online), mostrados lado a lado em `/admin/clients` em vez de um valor
+> genérico "Ambos". A migração converte os dados existentes automaticamente
+> (`both` → `{institutional, ecommerce}` num cliente, `{}` — "genérico,
+> aplica-se a todos" — num artigo da KB), mas vale a pena rever os clientes
+> convertidos na tabela que a própria migração devolve no fim. (`schema.sql`
+> e os `seed_knowledge_base_*.sql`/`seed.sql` já incluem isto para
+> instalações novas.)
 
-Criar um projecto no Supabase.
-
-No **SQL Editor**, executar pela seguinte ordem:
-
-```text
-supabase/schema.sql
-supabase/policies.sql
-supabase/seed.sql
-```
-
-O `seed.sql` é opcional.
-
-Depois, em **Project Settings → API**, obter:
-
-```text
-Supabase URL
-anon public key
-service_role key
-```
-
----
-
-### 2. Criar o administrador inicial
-
-Criar manualmente o primeiro utilizador através de:
-
-```text
-Authentication → Users → Add user
-```
-
-Depois, no SQL Editor:
-
-```sql
-UPDATE public.profiles
-SET
-    role = 'admin',
-    full_name = 'O seu nome'
-WHERE id = '<uuid do utilizador>';
-```
-
-A partir daí, o administrador pode gerir os restantes clientes e developers através da aplicação.
-
----
-
-### 3. Configurar variáveis de ambiente
-
-Criar o ficheiro `.env.local` a partir do exemplo:
+### 2. Variáveis de ambiente
 
 ```bash
 cp .env.example .env.local
@@ -377,168 +352,60 @@ Iniciar o servidor de desenvolvimento:
 npm run dev
 ```
 
-A aplicação ficará disponível em:
+Abrir [http://localhost:3000](http://localhost:3000).
 
-```text
-http://localhost:3000
-```
+### 4. Deploy na Vercel
 
----
+1. Importar o repositório em [vercel.com/new](https://vercel.com/new).
+2. Configurar as mesmas variáveis de ambiente do `.env.local` em
+   **Project Settings → Environment Variables**.
+3. Atualizar `ALLOWED_ORIGINS` e `NEXT_PUBLIC_APP_URL` para o domínio real
+   de produção.
+4. Deploy.
 
-## Deploy
+## Notas e próximos passos sugeridos
 
-O projecto está preparado para deploy na **Vercel**.
+- **WhatsApp**: por defeito `WHATSAPP_NOTIFICATIONS_ENABLED=false`. O
+  sandbox Twilio serve para testes; em produção é necessário um número
+  aprovado e templates de mensagem aprovados pela Meta para contactar
+  clientes fora da janela de 24h.
+- **Rate limiting**: sem `UPSTASH_REDIS_REST_URL`/`TOKEN`, fica inativo
+  (não bloqueia nada). Recomendado configurar em produção.
+- **Base de conhecimento**: usa pesquisa full-text nativa do Postgres
+  (`tsvector`, dicionário `portuguese`). Para respostas semânticas mais
+  refinadas (parafraseando a pergunta), pode evoluir-se para `pgvector` com
+  embeddings — como o acesso a dados está todo atrás de
+  `KnowledgeBaseRepository` (ver "Arquitetura" acima), essa troca fica
+  contida no adaptador Supabase, sem tocar no resto da aplicação.
+- **Streaming da LLM**: atualmente a resposta é devolvida de uma vez. Pode
+  evoluir-se `/api/chat` e `LlmProvider.generateAnswer` para *streaming*
+  para uma experiência mais próxima do ChatGPT token-a-token.
+- Popular `knowledge_base` com o conteúdo real dos procedimentos da Vértice
+  é o que determina a qualidade das respostas automáticas e reduz o volume
+  de tickets abertos para os devs. Dois seeds prontos a correr no SQL
+  Editor: [`supabase/seed_knowledge_base_institucional.sql`](supabase/seed_knowledge_base_institucional.sql)
+  (factos do site institucional — serviços, preços de referência,
+  processo, equipa, portefólio, contactos, lido diretamente de
+  [vertice-digital.example](https://vertice-digital.example/))
+  e [`supabase/seed_knowledge_base_operacional.sql`](supabase/seed_knowledge_base_operacional.sql)
+  (dia a dia do cliente já em produção: pagamentos, acessos, site em
+  baixo, alterações, funcionalidades novas, atualizações, e como usar o
+  próprio centro de apoio — recuperar password, acompanhar o estado de um
+  ticket). Este segundo inclui algumas entradas `[REVER]` por publicar —
+  rever e confirmar em `/admin/knowledge-base` antes de as ativar.
 
-### Processo
-
-1. Importar o repositório na Vercel.
-2. Configurar as mesmas variáveis de ambiente utilizadas localmente.
-3. Definir o domínio de produção em `NEXT_PUBLIC_APP_URL`.
-4. Configurar `ALLOWED_ORIGINS`.
-5. Fazer o deploy.
-
----
-
-## Variáveis de ambiente
-
-Entre as principais configurações encontram-se:
-
-```text
-Supabase
-LLM_PROVIDER
-Gemini / Anthropic / OpenAI
-Resend
-Twilio
-Upstash
-ALLOWED_ORIGINS
-NEXT_PUBLIC_APP_URL
-```
-
-As chaves devem permanecer exclusivamente no ambiente do servidor.
-
----
-
-## Identidade visual
-
-A aplicação utiliza uma identidade visual simples e profissional baseada nas cores da Vértice.
-
-| Elemento      | Valor     |
-| ------------- | --------- |
-| Texto / marca | `#09182A` |
-| Fundo         | `#F4F6F8` |
-| Acento        | `#0F6E8C` |
-
-As cores estão definidas em:
-
-```text
-tailwind.config.ts
-```
-
-através dos tokens:
-
-```text
-ink
-surface
-accent
-```
-
----
-
-## Roadmap
-
-### WhatsApp
-
-Actualmente as notificações WhatsApp estão desactivadas por omissão:
-
-```env
-WHATSAPP_NOTIFICATIONS_ENABLED=false
-```
-
-Para produção, é necessário configurar um número aprovado e cumprir os requisitos aplicáveis da Meta para mensagens fora da janela de 24 horas.
-
-### Rate limiting
-
-O rate limiting pode utilizar Upstash.
-
-Sem:
-
-```text
-UPSTASH_REDIS_REST_URL
-UPSTASH_REDIS_REST_TOKEN
-```
-
-a funcionalidade permanece inactiva.
-
-É recomendado activá-la em produção.
-
-### Pesquisa semântica
-
-Evolução da pesquisa full-text PostgreSQL para:
-
-```text
-pgvector
-    ↓
-Embeddings
-    ↓
-Pesquisa semântica
-```
-
-A arquitectura actual permite manter esta alteração isolada no adapter responsável pelo acesso à base de conhecimento.
-
-### Streaming
-
-Actualmente a resposta da LLM é devolvida integralmente.
-
-Uma evolução futura poderá implementar **streaming**, permitindo apresentar a resposta progressivamente, aproximando a experiência da utilização do ChatGPT.
-
-### Base de conhecimento
-
-A próxima etapa crítica é popular a `knowledge_base` com os procedimentos e informação reais da Vértice.
-
-Quanto melhor for esta base de conhecimento, maior será a capacidade do sistema de responder automaticamente e menor será o número de tickets encaminhados para os developers.
-
----
-
-## Princípios de desenvolvimento
-
-O projecto segue alguns princípios fundamentais:
-
-* Separação entre lógica de negócio e infraestrutura.
-* Dependência de interfaces em vez de implementações concretas.
-* Rotas API simples e sem lógica de negócio.
-* Segredos exclusivamente no servidor.
-* Validação de todos os inputs externos.
-* Autorização baseada em papéis.
-* Defesa em profundidade na segurança.
-* Componentes externos isolados através de adapters.
-* Facilidade de substituição de fornecedores.
-
----
-
-## Estado do projecto
-
-**Stack actual:** Next.js + TypeScript + Supabase/PostgreSQL + Tailwind CSS
-
-**Deploy:** Vercel
-
-**LLM predefinida:** Gemini
-
-**LLMs suportadas:** Gemini, Anthropic Claude e OpenAI
-
-**Notificações:** Resend + Twilio
-
-**Arquitectura:** Ports & Adapters
-
-**Autenticação:** Supabase Auth
-
-**Autorização:** `client` / `dev` / `admin`
-
-**Base de dados:** PostgreSQL com RLS
-
----
-
-## Licença
-
-Este projecto é uma aplicação interna desenvolvida para a **Vértice**.
-
-A utilização, distribuição ou modificação do código deve respeitar as condições definidas pelos responsáveis pelo projecto.
+> **Se já tinha corrido `seed_knowledge_base_institucional.sql` antes de
+> 2026-08-20**, correr também
+> [`supabase/migration_atualizar_kb_institucional.sql`](supabase/migration_atualizar_kb_institucional.sql)
+> uma vez no SQL Editor: o site institucional da Vértice Digital mudou
+> (email, telefone, morada, equipa, portefólio, preços agora públicos, e o
+> serviço de "Automação e IA" deixou de existir como página própria) e,
+> como o seed usa `on conflict (title) do nothing`, voltar a correr o
+> ficheiro sozinho não atualiza as linhas já inseridas com os factos
+> antigos — só esta migração o faz. (`seed_knowledge_base_institucional.sql`
+> já inclui os factos corrigidos para instalações novas.)
+>
+> O código postal (1000-100) foi confirmado a partir do rodapé do site
+> (repetido de forma consistente em home/sobre/contactos) — a página de
+> Contactos, isolada, mostra 1000-130; se algum dia corrigirem essa
+> inconsistência no site, atualizar aqui também.

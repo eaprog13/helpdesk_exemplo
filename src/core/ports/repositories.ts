@@ -7,6 +7,7 @@
 
 import type {
   Conversa,
+  Departamento,
   EntradaBaseConhecimento,
   Mensagem,
   OrigemMensagem,
@@ -16,6 +17,7 @@ import type {
   PrioridadeTicket,
   EstadoTicket,
   AtualizacaoTicket,
+  AnexoTicket,
   CanalNotificacao,
   EventoNotificacao,
   EstadoNotificacao,
@@ -25,6 +27,12 @@ export interface RepositorioPerfil {
   obterPorId(id: string): Promise<Perfil | null>;
   atualizar(id: string, alteracoes: Partial<Perfil>): Promise<void>;
   listarClientes(): Promise<Perfil[]>;
+  /**
+   * Devolve os devs/admins de um departamento (ou todos, sem filtro) —
+   * usado pela atribuição automática (ver core/services/ticketService.ts)
+   * para saber quem são os candidatos antes de comparar carga de trabalho.
+   */
+  listarEquipa(departamento?: Departamento): Promise<Perfil[]>;
 }
 
 export interface RepositorioConversa {
@@ -70,29 +78,31 @@ export interface CorrespondenciaBaseConhecimento extends EntradaBaseConhecimento
 }
 
 export interface RepositorioBaseConhecimento {
-  /** Pesquisa por relevância no conteúdo publicado, filtrando por tipo de site quando indicado. */
+  /** Pesquisa por relevância no conteúdo publicado, filtrando por sobreposição com os tipos de site do cliente (ver TipoSite). */
   pesquisar(
     pergunta: string,
-    tipoSite: TipoSite | null,
+    tiposSite: TipoSite[],
     maxResultados: number
   ): Promise<CorrespondenciaBaseConhecimento[]>;
   listar(): Promise<EntradaBaseConhecimento[]>;
   criar(entrada: {
     titulo: string;
     conteudo: string;
-    tipoSite: TipoSite;
+    tipoSite: TipoSite[];
     etiquetas: string[];
     publicado: boolean;
     criadoPor: string;
+    departamento?: Departamento | null;
   }): Promise<EntradaBaseConhecimento>;
   atualizar(
     id: string,
     alteracoes: Partial<{
       titulo: string;
       conteudo: string;
-      tipoSite: TipoSite;
+      tipoSite: TipoSite[];
       etiquetas: string[];
       publicado: boolean;
+      departamento: Departamento | null;
     }>
   ): Promise<EntradaBaseConhecimento | null>;
   remover(id: string): Promise<void>;
@@ -106,6 +116,8 @@ export interface RepositorioTicket {
     titulo: string;
     pergunta: string;
     respostaLlm: string | null;
+    departamento?: Departamento | null;
+    idDevAtribuido?: string | null;
   }): Promise<Ticket>;
   obterPorId(id: string): Promise<Ticket | null>;
   atualizar(
@@ -114,9 +126,21 @@ export interface RepositorioTicket {
       estado: EstadoTicket;
       prioridade: PrioridadeTicket;
       idDevAtribuido: string | null;
+      departamento: Departamento | null;
       dataResolucao: string | null;
     }>
   ): Promise<Ticket | null>;
+  /**
+   * Carga de trabalho de cada dev pedido — para a atribuição automática
+   * (ver core/services/ticketService.ts): quantos tickets ativos
+   * (open/in_progress) tem agora (decide quem leva o próximo ticket) e há
+   * quanto tempo foi atribuído pela última vez, em qualquer estado (só
+   * para desempatar entre devs com a mesma carga — quem está parado há
+   * mais tempo sem receber nada novo tem prioridade).
+   */
+  obterCargaTrabalhoPorDev(
+    idsDevs: string[]
+  ): Promise<Record<string, { ativos: number; ultimaAtribuicaoEm: string | null }>>;
   listarPorCliente(idCliente: string): Promise<Ticket[]>;
   listarTodos(): Promise<Ticket[]>;
 }
@@ -129,6 +153,18 @@ export interface RepositorioAtualizacaoTicket {
     visivelParaCliente: boolean;
   }): Promise<AtualizacaoTicket>;
   listarPorTicket(idTicket: string, opcoes?: { apenasVisivelParaCliente?: boolean }): Promise<AtualizacaoTicket[]>;
+}
+
+export interface RepositorioAnexoTicket {
+  criar(dados: {
+    idTicket: string;
+    idUtilizador: string;
+    caminhoFicheiro: string;
+    nomeFicheiro: string;
+    tipoConteudo: string;
+    tamanhoBytes: number;
+  }): Promise<AnexoTicket>;
+  listarPorTicket(idTicket: string): Promise<AnexoTicket[]>;
 }
 
 export interface RepositorioRegistoNotificacao {

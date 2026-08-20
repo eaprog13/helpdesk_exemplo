@@ -5,13 +5,35 @@ import Link from "next/link";
 import { Cartao } from "@/components/ui/Card";
 import { Campo } from "@/components/ui/Input";
 import { Botao } from "@/components/ui/Button";
-import type { Perfil, TipoSite } from "@/core/types";
+import { Distintivo } from "@/components/ui/Badge";
+import type { Departamento, Perfil, TipoSite } from "@/core/types";
 
+// Serviço(s) que o cliente TEM contratado com a Vértice — mostrado como
+// "Serviço" no cartão abaixo. Um cliente pode ter mais do que um (ex.: site
+// institucional E loja online), por isso é sempre multi-seleção, nunca um
+// valor único "Ambos" (ver TipoSite em core/types.ts).
 const TIPOS_SITE: { valor: TipoSite; rotulo: string }[] = [
-  { valor: "institutional", rotulo: "Site institucional" },
-  { valor: "ecommerce", rotulo: "Loja online" },
-  { valor: "both", rotulo: "Ambos" },
+  { valor: "institutional", rotulo: "Site Institucional" },
+  { valor: "ecommerce", rotulo: "Loja Online" },
+  { valor: "web_app", rotulo: "Aplicação Web" },
+  { valor: "mobile_app", rotulo: "Mobile App" },
+  { valor: "other", rotulo: "Outros" },
 ];
+
+// Organização interna do admin (ex.: "que equipa acompanha este cliente
+// por dentro") — NÃO é o serviço que o cliente tem contratado (isso é
+// site_type, mostrado como "Serviço" no cartão abaixo). Nunca usada na
+// atribuição de tickets (ver Departamento em core/types.ts).
+const DEPARTAMENTOS_CLIENTE: { valor: Departamento; rotulo: string }[] = [
+  { valor: "desenvolvimento", rotulo: "Desenvolvimento" },
+  { valor: "marketing", rotulo: "Marketing Digital" },
+  { valor: "design", rotulo: "Branding/Design" },
+  { valor: "geral", rotulo: "Geral" },
+];
+
+function alternarNaLista<T>(lista: T[], valor: T): T[] {
+  return lista.includes(valor) ? lista.filter((v) => v !== valor) : [...lista, valor];
+}
 
 export function GestorClientes({ clientesIniciais }: { clientesIniciais: Perfil[] }) {
   const [clientes, setClientes] = useState(clientesIniciais);
@@ -20,7 +42,8 @@ export function GestorClientes({ clientesIniciais }: { clientesIniciais: Perfil[
     nomeCompleto: "",
     nomeEmpresa: "",
     telefone: "",
-    tipoSite: "institutional" as TipoSite,
+    tiposSite: ["institutional"] as TipoSite[],
+    departamentos: [] as Departamento[],
   });
   const [aCarregar, setACarregar] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -46,7 +69,14 @@ export function GestorClientes({ clientesIniciais }: { clientesIniciais: Perfil[
     }
 
     setSucesso(`Conta criada para ${formulario.email}. As credenciais foram enviadas por email.`);
-    setFormulario({ email: "", nomeCompleto: "", nomeEmpresa: "", telefone: "", tipoSite: "institutional" });
+    setFormulario({
+      email: "",
+      nomeCompleto: "",
+      nomeEmpresa: "",
+      telefone: "",
+      tiposSite: ["institutional"],
+      departamentos: [],
+    });
 
     const respostaLista = await fetch("/api/admin/clients");
     if (respostaLista.ok) {
@@ -85,22 +115,52 @@ export function GestorClientes({ clientesIniciais }: { clientesIniciais: Perfil[
               value={formulario.telefone}
               onChange={(e) => setFormulario({ ...formulario, telefone: e.target.value })}
             />
-            <select
-              value={formulario.tipoSite}
-              onChange={(e) => setFormulario({ ...formulario, tipoSite: e.target.value as TipoSite })}
-              className="w-full rounded-lg border border-ink-100 bg-white px-3.5 py-2.5 text-sm text-ink transition-shadow duration-150 focus:outline-none focus:ring-2 focus:ring-accent"
-            >
-              {TIPOS_SITE.map((t) => (
-                <option key={t.valor} value={t.valor}>
-                  {t.rotulo}
-                </option>
-              ))}
-            </select>
+
+            <fieldset>
+              <legend className="mb-1.5 text-sm font-medium text-ink">Serviço(s)</legend>
+              <div className="flex flex-wrap gap-3">
+                {TIPOS_SITE.map((t) => (
+                  <label key={t.valor} className="flex items-center gap-1.5 text-sm text-ink-400">
+                    <input
+                      type="checkbox"
+                      checked={formulario.tiposSite.includes(t.valor)}
+                      onChange={() =>
+                        setFormulario({ ...formulario, tiposSite: alternarNaLista(formulario.tiposSite, t.valor) })
+                      }
+                    />
+                    {t.rotulo}
+                  </label>
+                ))}
+              </div>
+              {formulario.tiposSite.length === 0 && (
+                <p className="mt-1 text-xs text-danger">Escolha pelo menos um serviço.</p>
+              )}
+            </fieldset>
+
+            <fieldset>
+              <legend className="mb-1.5 text-sm font-medium text-ink">
+                Departamento <span className="font-normal text-ink-300">(organização interna, opcional)</span>
+              </legend>
+              <div className="flex flex-wrap gap-3">
+                {DEPARTAMENTOS_CLIENTE.map((d) => (
+                  <label key={d.valor} className="flex items-center gap-1.5 text-sm text-ink-400">
+                    <input
+                      type="checkbox"
+                      checked={formulario.departamentos.includes(d.valor)}
+                      onChange={() =>
+                        setFormulario({ ...formulario, departamentos: alternarNaLista(formulario.departamentos, d.valor) })
+                      }
+                    />
+                    {d.rotulo}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
 
             {erro && <p className="text-sm text-danger">{erro}</p>}
             {sucesso && <p className="text-sm text-success">{sucesso}</p>}
 
-            <Botao type="submit" isLoading={aCarregar} className="w-full">
+            <Botao type="submit" isLoading={aCarregar} disabled={formulario.tiposSite.length === 0} className="w-full">
               Criar conta e enviar credenciais
             </Botao>
           </form>
@@ -118,6 +178,12 @@ export function GestorClientes({ clientesIniciais }: { clientesIniciais: Perfil[
               aoAtualizarLogo={(logoUrl) =>
                 setClientes((anteriores) => anteriores.map((x) => (x.id === c.id ? { ...x, logo_url: logoUrl } : x)))
               }
+              aoAtualizarDepartamentos={(departamentos) =>
+                setClientes((anteriores) => anteriores.map((x) => (x.id === c.id ? { ...x, department: departamentos } : x)))
+              }
+              aoAtualizarServicos={(tiposSite) =>
+                setClientes((anteriores) => anteriores.map((x) => (x.id === c.id ? { ...x, site_type: tiposSite } : x)))
+              }
             />
           ))}
         </div>
@@ -130,14 +196,86 @@ function CartaoCliente({
   cliente,
   atraso,
   aoAtualizarLogo,
+  aoAtualizarDepartamentos,
+  aoAtualizarServicos,
 }: {
   cliente: Perfil;
   atraso: number;
   aoAtualizarLogo: (logoUrl: string) => void;
+  aoAtualizarDepartamentos: (departamentos: Departamento[]) => void;
+  aoAtualizarServicos: (tiposSite: TipoSite[]) => void;
 }) {
   const inputFicheiroRef = useRef<HTMLInputElement>(null);
   const [aCarregarLogo, setACarregarLogo] = useState(false);
   const [erroLogo, setErroLogo] = useState<string | null>(null);
+
+  const [aEditarDepartamentos, setAEditarDepartamentos] = useState(false);
+  const [departamentosEditados, setDepartamentosEditados] = useState<Departamento[]>(cliente.department);
+  const [aGuardarDepartamentos, setAGuardarDepartamentos] = useState(false);
+  const [erroDepartamentos, setErroDepartamentos] = useState<string | null>(null);
+
+  const [aEditarServicos, setAEditarServicos] = useState(false);
+  const [servicosEditados, setServicosEditados] = useState<TipoSite[]>(cliente.site_type);
+  const [aGuardarServicos, setAGuardarServicos] = useState(false);
+  const [erroServicos, setErroServicos] = useState<string | null>(null);
+
+  function abrirEdicaoDepartamentos() {
+    setDepartamentosEditados(cliente.department);
+    setErroDepartamentos(null);
+    setAEditarDepartamentos(true);
+  }
+
+  async function guardarDepartamentos() {
+    setAGuardarDepartamentos(true);
+    setErroDepartamentos(null);
+
+    const resposta = await fetch(`/api/admin/clients/${cliente.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ departamentos: departamentosEditados }),
+    });
+    const corpo = await resposta.json();
+    setAGuardarDepartamentos(false);
+
+    if (!resposta.ok) {
+      setErroDepartamentos(corpo.error ?? "Não foi possível guardar as alterações.");
+      return;
+    }
+
+    aoAtualizarDepartamentos(departamentosEditados);
+    setAEditarDepartamentos(false);
+  }
+
+  function abrirEdicaoServicos() {
+    setServicosEditados(cliente.site_type);
+    setErroServicos(null);
+    setAEditarServicos(true);
+  }
+
+  async function guardarServicos() {
+    if (servicosEditados.length === 0) {
+      setErroServicos("Escolha pelo menos um serviço.");
+      return;
+    }
+    setAGuardarServicos(true);
+    setErroServicos(null);
+
+    const resposta = await fetch(`/api/admin/clients/${cliente.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tiposSite: servicosEditados }),
+    });
+    const corpo = await resposta.json();
+    setAGuardarServicos(false);
+
+    if (!resposta.ok) {
+      setErroServicos(corpo.error ?? "Não foi possível guardar as alterações.");
+      return;
+    }
+
+    aoAtualizarServicos(servicosEditados);
+    setAEditarServicos(false);
+  }
 
   async function aoEscolherFicheiro(evento: React.ChangeEvent<HTMLInputElement>) {
     const ficheiro = evento.target.files?.[0];
@@ -180,6 +318,45 @@ function CartaoCliente({
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium text-ink">{cliente.full_name}</p>
           <p className="truncate text-xs text-ink-400">{cliente.company_name}</p>
+
+          {/* Serviço = o(s) que o cliente TEM contratado com a Vértice (site
+              institucional, loja online, aplicação web…) — vem de
+              site_type, nunca fica vazio. Pode ter mais do que um, todos
+              aparecem lado a lado. Não confundir com "Departamento"
+              abaixo, que é só organização interna do admin. */}
+          {!aEditarServicos && (
+            <div className="mt-1 flex flex-wrap items-center gap-1">
+              <span className="text-xs text-ink-300">Serviço:</span>
+              {cliente.site_type.map((t) => (
+                <Distintivo key={t} value={t} />
+              ))}
+              <button
+                type="button"
+                onClick={abrirEdicaoServicos}
+                className="text-xs text-accent-hover underline-offset-2 hover:underline"
+              >
+                Editar
+              </button>
+            </div>
+          )}
+
+          {!aEditarDepartamentos && (
+            <div className="mt-1 flex flex-wrap items-center gap-1">
+              <span className="text-xs text-ink-300">Departamento (interno):</span>
+              {cliente.department.length > 0 ? (
+                cliente.department.map((d) => <Distintivo key={d} value={d} />)
+              ) : (
+                <span className="text-xs text-ink-300">nenhum</span>
+              )}
+              <button
+                type="button"
+                onClick={abrirEdicaoDepartamentos}
+                className="text-xs text-accent-hover underline-offset-2 hover:underline"
+              >
+                Editar
+              </button>
+            </div>
+          )}
           {cliente.must_change_password && (
             <p className="mt-1 text-[11px] text-warning">Aguarda 1º acesso</p>
           )}
@@ -210,6 +387,72 @@ function CartaoCliente({
         </div>
       </div>
       {erroLogo && <p className="mt-2 text-xs text-danger">{erroLogo}</p>}
+
+      {aEditarServicos && (
+        <div className="mt-3 space-y-2 border-t border-ink-100 pt-3">
+          <p className="text-xs font-medium text-ink-400">Serviço(s)</p>
+          <div className="flex flex-wrap gap-3">
+            {TIPOS_SITE.map((t) => (
+              <label key={t.valor} className="flex items-center gap-1.5 text-sm text-ink-400">
+                <input
+                  type="checkbox"
+                  checked={servicosEditados.includes(t.valor)}
+                  onChange={() => setServicosEditados(alternarNaLista(servicosEditados, t.valor))}
+                />
+                {t.rotulo}
+              </label>
+            ))}
+          </div>
+          {erroServicos && <p className="text-xs text-danger">{erroServicos}</p>}
+          <div className="flex gap-2">
+            <Botao type="button" size="sm" isLoading={aGuardarServicos} onClick={guardarServicos}>
+              Guardar
+            </Botao>
+            <Botao
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={aGuardarServicos}
+              onClick={() => setAEditarServicos(false)}
+            >
+              Cancelar
+            </Botao>
+          </div>
+        </div>
+      )}
+
+      {aEditarDepartamentos && (
+        <div className="mt-3 space-y-2 border-t border-ink-100 pt-3">
+          <p className="text-xs font-medium text-ink-400">Departamento (organização interna, opcional)</p>
+          <div className="flex flex-wrap gap-3">
+            {DEPARTAMENTOS_CLIENTE.map((d) => (
+              <label key={d.valor} className="flex items-center gap-1.5 text-sm text-ink-400">
+                <input
+                  type="checkbox"
+                  checked={departamentosEditados.includes(d.valor)}
+                  onChange={() => setDepartamentosEditados(alternarNaLista(departamentosEditados, d.valor))}
+                />
+                {d.rotulo}
+              </label>
+            ))}
+          </div>
+          {erroDepartamentos && <p className="text-xs text-danger">{erroDepartamentos}</p>}
+          <div className="flex gap-2">
+            <Botao type="button" size="sm" isLoading={aGuardarDepartamentos} onClick={guardarDepartamentos}>
+              Guardar
+            </Botao>
+            <Botao
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={aGuardarDepartamentos}
+              onClick={() => setAEditarDepartamentos(false)}
+            >
+              Cancelar
+            </Botao>
+          </div>
+        </div>
+      )}
     </Cartao>
   );
 }

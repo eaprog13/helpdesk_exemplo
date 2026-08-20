@@ -1,11 +1,30 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { criarClienteSupabase } from "@/lib/supabase/client";
 import { Botao } from "@/components/ui/Button";
 import { Campo } from "@/components/ui/Input";
+import { CampoPassword } from "@/components/ui/PasswordInput";
 import { Cartao } from "@/components/ui/Card";
+
+/**
+ * Só aceita caminhos internos relativos (ex.: "/tickets/123") como destino
+ * de redirecionamento pós-login — nunca um URL absoluto ou "//host" (que o
+ * browser trata como protocol-relative). "redirectTo" vem de um parâmetro de
+ * query controlado pelo visitante do link, por isso tem de ser validado aqui
+ * antes de navegar: sem isto, um link malicioso "/login?redirectTo=https://
+ * site-falso.pt" levaria a vítima a autenticar-se no domínio real (por isso
+ * de confiança) e a acabar redirecionada para um site de phishing (open
+ * redirect, CWE-601).
+ */
+function caminhoInternoSeguro(destino: string | null): string {
+  if (!destino || !destino.startsWith("/") || destino.startsWith("//")) {
+    return "/";
+  }
+  return destino;
+}
 
 export function FormularioLogin() {
   const router = useRouter();
@@ -48,7 +67,7 @@ export function FormularioLogin() {
       console.error("[login] não foi possível iniciar nova conversa:", erroConversa);
     }
 
-    const redirecionarPara = parametrosPesquisa.get("redirectTo") ?? "/";
+    const redirecionarPara = caminhoInternoSeguro(parametrosPesquisa.get("redirectTo"));
     router.replace(redirecionarPara);
     router.refresh();
   }
@@ -72,12 +91,16 @@ export function FormularioLogin() {
             />
           </div>
           <div>
-            <label htmlFor="palavraPasse" className="mb-1.5 block text-sm font-medium text-ink">
-              Password
-            </label>
-            <Campo
+            <div className="mb-1.5 flex items-center justify-between">
+              <label htmlFor="palavraPasse" className="block text-sm font-medium text-ink">
+                Password
+              </label>
+              <Link href="/forgot-password" className="text-xs text-accent-hover underline">
+                Esqueceu-se da password?
+              </Link>
+            </div>
+            <CampoPassword
               id="palavraPasse"
-              type="password"
               autoComplete="current-password"
               required
               value={palavraPasse}
@@ -99,7 +122,11 @@ export function FormularioLogin() {
       </Cartao>
 
       <p className="mt-6 text-center text-xs text-ink-300">
-        Ainda não tem acesso? Contacte a equipa da Vértice para lhe ser criada uma conta.
+        Ainda não tem acesso? Contacte a equipa da Vértice Digital em{" "}
+        <a href="mailto:geral@vertice-digital.example" className="text-accent-hover underline">
+          geral@vertice-digital.example
+        </a>{" "}
+        para lhe ser criada uma conta.
       </p>
     </>
   );

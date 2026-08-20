@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Botao } from "@/components/ui/Button";
-import { Campo } from "@/components/ui/Input";
+import { CampoPassword } from "@/components/ui/PasswordInput";
 import { Cartao } from "@/components/ui/Card";
 
 export default function PaginaAlterarPalavraPasse() {
@@ -44,10 +44,13 @@ export default function PaginaAlterarPalavraPasse() {
     <main className="flex min-h-screen items-center justify-center bg-surface px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <h1 className="text-xl font-semibold text-ink">Defina a sua password</h1>
-          <p className="mt-1 text-sm text-ink-400">
-            Por segurança, precisa de escolher uma nova password antes de continuar.
-          </p>
+          <h1 className="text-xl font-semibold text-ink">Alterar password</h1>
+          {/* Frase neutra de propósito — esta página serve tanto o 1º
+              acesso obrigatório (ver "app"/layout.tsx e admin/layout.tsx,
+              must_change_password) como uma alteração voluntária feita
+              mais tarde a partir do menu ("Terminar sessão"/"Alterar
+              password" no Cabecalho). */}
+          <p className="mt-1 text-sm text-ink-400">Escolha uma password forte para a sua conta.</p>
         </div>
 
         <Cartao className="p-6">
@@ -56,9 +59,9 @@ export default function PaginaAlterarPalavraPasse() {
               <label htmlFor="novaPalavraPasse" className="mb-1.5 block text-sm font-medium text-ink">
                 Nova password
               </label>
-              <Campo
+              <CampoPassword
                 id="novaPalavraPasse"
-                type="password"
+                autoComplete="new-password"
                 required
                 minLength={10}
                 value={novaPalavraPasse}
@@ -72,9 +75,9 @@ export default function PaginaAlterarPalavraPasse() {
               <label htmlFor="confirmarPalavraPasse" className="mb-1.5 block text-sm font-medium text-ink">
                 Confirmar password
               </label>
-              <Campo
+              <CampoPassword
                 id="confirmarPalavraPasse"
-                type="password"
+                autoComplete="new-password"
                 required
                 minLength={10}
                 value={confirmarPalavraPasse}

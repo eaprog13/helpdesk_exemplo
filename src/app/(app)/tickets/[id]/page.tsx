@@ -3,18 +3,21 @@ import { exigirUtilizador } from "@/lib/auth/session";
 import { ErroAcessoNegado, ErroNaoEncontrado, obterTicketComAtualizacoes } from "@/core/services/ticketService";
 import { Cartao } from "@/components/ui/Card";
 import { Distintivo } from "@/components/ui/Badge";
+import { ListaAnexosTicket } from "@/components/ticket/AttachmentsList";
+import { AcoesTicketCliente } from "@/components/ticket/ClientTicketActions";
 
-export default async function PaginaDetalhePedidoCliente({ params }: { params: { id: string } }) {
+export default async function PaginaDetalhePedidoCliente({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const { perfil, dependencias } = await exigirUtilizador();
 
   let resultado;
   try {
-    resultado = await obterTicketComAtualizacoes(dependencias, perfil, params.id);
+    resultado = await obterTicketComAtualizacoes(dependencias, perfil, id);
   } catch (erro) {
     if (erro instanceof ErroNaoEncontrado || erro instanceof ErroAcessoNegado) notFound();
     throw erro;
   }
-  const { ticket, atualizacoes } = resultado;
+  const { ticket, atualizacoes, anexos } = resultado;
 
   return (
     <div className="mx-auto h-full max-w-3xl overflow-y-auto px-6 py-6">
@@ -26,6 +29,17 @@ export default async function PaginaDetalhePedidoCliente({ params }: { params: {
       <Cartao className="mb-4 p-4">
         <p className="mb-1 text-xs font-medium uppercase tracking-wide text-ink-300">A sua pergunta</p>
         <p className="text-sm text-ink">{ticket.question}</p>
+      </Cartao>
+
+      {ticket.status === "resolved" && <AcoesTicketCliente idTicket={ticket.id} />}
+
+      <Cartao className="mb-4 p-4">
+        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-300">Anexos</p>
+        <ListaAnexosTicket
+          idTicket={ticket.id}
+          anexosIniciais={anexos}
+          legenda={anexos.length === 0 ? "Ainda não anexou nenhum ficheiro a este pedido." : undefined}
+        />
       </Cartao>
 
       <p className="mb-3 text-sm font-medium text-ink">Atualizações</p>

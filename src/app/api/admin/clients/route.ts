@@ -20,7 +20,11 @@ const esquemaCriacaoCliente = z.object({
     .regex(/^\+[1-9]\d{6,14}$/, "Telefone deve estar em formato internacional E.164, ex: +351912345678")
     .optional()
     .or(z.literal("")),
-  tipoSite: z.enum(["institutional", "ecommerce", "both"]),
+  tiposSite: z
+    .array(z.enum(["institutional", "ecommerce", "web_app", "mobile_app", "other"]))
+    .min(1, "Escolha pelo menos um serviço.")
+    .max(5),
+  departamentos: z.array(z.enum(["desenvolvimento", "marketing", "design", "geral"])).max(4).default([]),
 });
 
 /**
@@ -54,7 +58,8 @@ export async function POST(pedido: Request) {
       nomeCompleto: dadosValidados.data.nomeCompleto,
       nomeEmpresa: dadosValidados.data.nomeEmpresa,
       telefone: dadosValidados.data.telefone || null,
-      tipoSite: dadosValidados.data.tipoSite,
+      tiposSite: dadosValidados.data.tiposSite,
+      departamentos: dadosValidados.data.departamentos,
     });
 
     return comCors(pedido, NextResponse.json({ cliente }, { status: 201 }));
