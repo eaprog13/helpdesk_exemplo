@@ -10,9 +10,10 @@ next-env.d.ts
 /build
 
 # variáveis de ambiente — NUNCA fazer commit de segredos
-.env
-.env.local
-.env.*.local
+# (.env* apanha também .env.production/.env.development, que os padrões
+# antigos ".env" + ".env.local" + ".env.*.local" deixavam passar)
+.env*
+!.env.example
 
 # logs
 npm-debug.log*

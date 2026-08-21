@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { ErroAutenticacao, exigirUtilizador } from "@/lib/auth/session";
-import { BarraLateral } from "@/components/layout/Sidebar";
-import { Cabecalho } from "@/components/layout/Header";
+import { AdminShell } from "@/components/layout/AdminShell";
 import type { Perfil } from "@/core/types";
 
 // "Resumo" e "Dashboard" fundiram-se num só (ver admin/page.tsx +
@@ -49,20 +48,15 @@ export default async function LayoutAdmin({ children }: { children: React.ReactN
   if (perfil.role !== "admin" && perfil.role !== "dev") redirect("/chat");
 
   return (
-    <div className="flex h-screen bg-surface">
-      <BarraLateral
-        itens={perfil.role === "dev" ? ITENS_NAVEGACAO_DEV : ITENS_NAVEGACAO_ADMIN}
-        rotuloMarca="Vértice Digital"
-        papel={perfil.role === "dev" ? "dev" : "admin"}
-        departamentos={perfil.department}
-      />
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <Cabecalho
-          nomeCompleto={perfil.full_name}
-          nomeEmpresa={perfil.role === "admin" ? "Administrador" : "Developer"}
-        />
-        <div className="flex-1 overflow-hidden">{children}</div>
-      </div>
-    </div>
+    <AdminShell
+      itens={perfil.role === "dev" ? ITENS_NAVEGACAO_DEV : ITENS_NAVEGACAO_ADMIN}
+      rotuloMarca="Vértice Digital"
+      papel={perfil.role === "dev" ? "dev" : "admin"}
+      departamentos={perfil.department}
+      nomeCompleto={perfil.full_name}
+      nomeEmpresa={perfil.role === "admin" ? "Administrador" : "Developer"}
+    >
+      {children}
+    </AdminShell>
   );
 }
