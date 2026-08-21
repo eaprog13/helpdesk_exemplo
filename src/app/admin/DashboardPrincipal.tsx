@@ -1,53 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { clsx } from "clsx";
 import { Cartao } from "@/components/ui/Card";
 import type { EstatisticasTickets, ContagemEstados } from "@/core/services/ticketService";
 import type { Departamento } from "@/core/types";
-
-/**
- * Anima um número a subir de 0 até ao valor final, uma vez ao montar —
- * nunca em loop (ver globals.css, .animate-entrada: mesma política de
- * movimento do resto da app). Ignorado com prefers-reduced-motion.
- */
-function useContagemAnimada(valorFinal: number, duracaoMs = 900): number {
-  const [valor, setValor] = useState(0);
-  const jaAnimou = useRef(false);
-
-  useEffect(() => {
-    if (jaAnimou.current) return;
-    jaAnimou.current = true;
-
-    // Separador em segundo plano (ex.: aba não focada ao carregar) pausa o
-    // requestAnimationFrame indefinidamente em muitos browsers — sem isto,
-    // o contador ficava preso a "0" até a página ganhar foco. Mesmo com a
-    // aba visível, uma rede de segurança (setTimeout) garante o valor
-    // final mesmo que o rAF nunca chegue a completar.
-    if (document.hidden || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      setValor(valorFinal);
-      return;
-    }
-
-    const inicio = performance.now();
-    let frame: number;
-    function passo(agora: number) {
-      const progresso = Math.min(1, (agora - inicio) / duracaoMs);
-      const suavizado = 1 - Math.pow(1 - progresso, 3);
-      setValor(Math.round(valorFinal * suavizado));
-      if (progresso < 1) frame = requestAnimationFrame(passo);
-    }
-    frame = requestAnimationFrame(passo);
-    const seguranca = setTimeout(() => setValor(valorFinal), duracaoMs + 150);
-    return () => {
-      cancelAnimationFrame(frame);
-      clearTimeout(seguranca);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- só deve correr uma vez, ver jaAnimou
-  }, []);
-
-  return valor;
-}
 
 function formatarDuracao(ms: number): string {
   const horas = ms / 3_600_000;
@@ -95,12 +52,11 @@ function CartaoEstatistica({
   descricao: string;
   atraso: number;
 }) {
-  const valorAnimado = useContagemAnimada(valor);
   return (
     <Cartao interativo className="animate-entrada p-5" style={{ animationDelay: `${atraso}ms` }}>
       <p className="text-xs font-medium uppercase tracking-wide text-ink-300">{rotulo}</p>
       <p className={`mt-1.5 text-3xl font-semibold ${corTexto ?? "text-ink"}`}>
-        {valorAnimado}
+        {valor}
         {sufixo}
       </p>
       <p className="mt-1 text-xs text-ink-400">{descricao}</p>
