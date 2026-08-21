@@ -40,6 +40,7 @@ export class RepositorioTicketSupabase implements RepositorioTicket {
     if (alteracoes.idDevAtribuido !== undefined) payload.assigned_dev_id = alteracoes.idDevAtribuido;
     if (alteracoes.departamento !== undefined) payload.department = alteracoes.departamento;
     if (alteracoes.dataResolucao !== undefined) payload.resolved_at = alteracoes.dataResolucao;
+    if (alteracoes.reopenedCount !== undefined) payload.reopened_count = alteracoes.reopenedCount;
 
     const { data, error } = await this.bd
       .from("tickets")

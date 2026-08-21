@@ -5,6 +5,7 @@ import { Cartao } from "@/components/ui/Card";
 import { Campo } from "@/components/ui/Input";
 import { Botao } from "@/components/ui/Button";
 import { Distintivo } from "@/components/ui/Badge";
+import { CaixaSelecao, GrupoCaixasSelecao } from "@/components/ui/Checkbox";
 import type { EntradaBaseConhecimento, TipoSite, Departamento } from "@/core/types";
 
 // [] (nenhum selecionado) = artigo genérico, aplica-se a todos os tipos —
@@ -125,20 +126,18 @@ export function GestorBaseConhecimento({
               <legend className="mb-1.5 text-sm font-medium text-ink">
                 Tipo(s) de site <span className="font-normal text-ink-300">(nenhum = genérico, aplica-se a todos)</span>
               </legend>
-              <div className="flex flex-wrap gap-3">
+              <GrupoCaixasSelecao>
                 {TIPOS_SITE.map((t) => (
-                  <label key={t.valor} className="flex items-center gap-1.5 text-sm text-ink-400">
-                    <input
-                      type="checkbox"
-                      checked={formulario.tipoSite.includes(t.valor)}
-                      onChange={() =>
-                        setFormulario({ ...formulario, tipoSite: alternarNaLista(formulario.tipoSite, t.valor) })
-                      }
-                    />
-                    {t.rotulo}
-                  </label>
+                  <CaixaSelecao
+                    key={t.valor}
+                    rotulo={t.rotulo}
+                    checked={formulario.tipoSite.includes(t.valor)}
+                    onChange={() =>
+                      setFormulario({ ...formulario, tipoSite: alternarNaLista(formulario.tipoSite, t.valor) })
+                    }
+                  />
                 ))}
-              </div>
+              </GrupoCaixasSelecao>
             </fieldset>
 
             <Campo
@@ -178,6 +177,7 @@ export function GestorBaseConhecimento({
           {entradas.map((entrada, i) => (
             <Cartao
               key={entrada.id}
+              interativo
               className="animate-entrada p-3"
               style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}
             >

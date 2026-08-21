@@ -14,9 +14,9 @@ const montserrat = Montserrat({
 });
 
 export const metadata: Metadata = {
-  title: "Apoio ao Cliente · Vértice",
+  title: "Apoio ao Cliente · Vértice Digital",
   description:
-    "Centro de apoio ao cliente da Vértice para clientes com sites institucionais e lojas online.",
+    "Centro de apoio ao cliente da Vértice Digital para clientes com sites institucionais e lojas online.",
   robots: { index: false, follow: false }, // aplicação interna, não indexar
 };
 

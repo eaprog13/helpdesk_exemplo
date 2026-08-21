@@ -24,10 +24,7 @@ export default async function PaginaPedidosCliente() {
       <div className="space-y-3">
         {tickets.map((ticket, i) => (
           <Link key={ticket.id} href={`/tickets/${ticket.id}`} className="block">
-            <Cartao
-              className="animate-entrada p-4 transition-[box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-md"
-              style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}
-            >
+            <Cartao interativo className="animate-entrada p-4" style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}>
               <div className="mb-2 flex items-center justify-between gap-2">
                 <span className="text-sm font-medium text-ink">{ticket.title}</span>
                 <Distintivo value={ticket.status} />

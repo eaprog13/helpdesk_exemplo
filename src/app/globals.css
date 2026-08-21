@@ -51,9 +51,32 @@
   }
 }
 
+/*
+ * Barra horizontal a "crescer" da esquerda — usada nos gráficos do
+ * dashboard (por dev, por departamento, distribuição de estados). Mesma
+ * política: transform (scaleX), one-shot, GPU.
+ */
+@keyframes crescer-barra {
+  from {
+    transform: scaleX(0);
+    transform-origin: left;
+  }
+  to {
+    transform: scaleX(1);
+    transform-origin: left;
+  }
+}
+
+@layer utilities {
+  .barra-cresce {
+    animation: crescer-barra 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+}
+
 /* Quem pede menos movimento ao sistema operativo, não recebe animações. */
 @media (prefers-reduced-motion: reduce) {
-  .animate-entrada {
+  .animate-entrada,
+  .barra-cresce {
     animation: none;
   }
   * {

@@ -16,10 +16,19 @@ export function ListaAnexosTicket({
   idTicket,
   anexosIniciais,
   legenda,
+  podeAnexar = true,
 }: {
   idTicket: string;
   anexosIniciais: AnexoTicketComUrl[];
   legenda?: string;
+  /**
+   * Esconde só o controlo de upload — a lista de anexos já existentes
+   * mantém-se sempre visível. false enquanto o pedido está "em resolução"
+   * (aguarda resposta) ou "fechado" — ver core/services/ticketService.ts,
+   * adicionarAnexoTicket, que aplica a mesma regra do lado do servidor
+   * (isto é só para a interface não prometer o que a API depois recusa).
+   */
+  podeAnexar?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [anexos, setAnexos] = useState(anexosIniciais);
@@ -69,23 +78,27 @@ export function ListaAnexosTicket({
         </ul>
       )}
 
-      <input
-        ref={inputRef}
-        type="file"
-        accept={TIPOS_ACEITES}
-        className="hidden"
-        onChange={aoEscolherFicheiro}
-      />
-      <Botao
-        type="button"
-        variant="secondary"
-        size="sm"
-        className="mt-2"
-        isLoading={aCarregar}
-        onClick={() => inputRef.current?.click()}
-      >
-        {anexos.length > 0 ? "Anexar outro ficheiro" : "Anexar ficheiro"}
-      </Botao>
+      {podeAnexar && (
+        <>
+          <input
+            ref={inputRef}
+            type="file"
+            accept={TIPOS_ACEITES}
+            className="hidden"
+            onChange={aoEscolherFicheiro}
+          />
+          <Botao
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="mt-2"
+            isLoading={aCarregar}
+            onClick={() => inputRef.current?.click()}
+          >
+            {anexos.length > 0 ? "Anexar outro ficheiro" : "Anexar ficheiro"}
+          </Botao>
+        </>
+      )}
       {erro && <p className="mt-1.5 text-xs text-danger">{erro}</p>}
     </div>
   );

@@ -186,7 +186,14 @@ create table if not exists public.tickets (
   department      text check (department in ('desenvolvimento', 'marketing', 'design', 'geral')),
   created_at      timestamptz not null default now(),
   updated_at      timestamptz not null default now(),
-  resolved_at     timestamptz
+  resolved_at     timestamptz,
+  -- Quantas vezes o cliente devolveu este ticket ("preciso de mais alguma
+  -- coisa", ver responderClienteTicket em core/services/ticketService.ts)
+  -- — nunca apagado, ao contrário de resolved_at (que volta a null em
+  -- cada reabertura). Usado no dashboard de estatísticas (/admin/dashboard)
+  -- como proxy de satisfação do cliente, na ausência de uma classificação
+  -- real.
+  reopened_count  integer not null default 0 check (reopened_count >= 0)
 );
 
 create index if not exists tickets_client_idx on public.tickets (client_id);
@@ -249,6 +256,31 @@ create table if not exists public.notifications_log (
 );
 
 create index if not exists notifications_log_client_idx on public.notifications_log (client_id);
+
+-- ── Row Level Security ──────────────────────────────────────────────────
+-- Este projeto NUNCA lê/escreve estas tabelas com a chave "anon" (browser)
+-- — só com "service_role" (ver src/lib/supabase/admin.ts, usado
+-- exclusivamente em src/composition/container.ts, do lado do servidor).
+-- Toda a autorização (quem vê/edita o quê) é decidida em código, em
+-- core/services/*.ts (ex.: devPodeVerTicket em ticketService.ts) — nunca
+-- em policies de RLS. service_role ignora sempre RLS, por isso estas
+-- tabelas continuam 100% acessíveis ao servidor da app; o único efeito
+-- disto é bloquear por omissão qualquer pedido direto à API REST da
+-- Supabase feito com a chave anon (nunca deveria acontecer, mas sem RLS
+-- ligado essa chave pública teria acesso de leitura/escrita a tudo, dados
+-- pessoais de clientes incluídos). Sem "create policy" nenhuma: RLS
+-- ligado + zero policies = negar tudo a anon/authenticated, por omissão
+-- do Postgres. Confirmado ao vivo (2026-08-20): tentativa de leitura/
+-- escrita nestas tabelas com a chave anon, sem sessão, devolve sempre
+-- vazio/42501.
+alter table public.profiles enable row level security;
+alter table public.knowledge_base enable row level security;
+alter table public.conversations enable row level security;
+alter table public.messages enable row level security;
+alter table public.tickets enable row level security;
+alter table public.ticket_updates enable row level security;
+alter table public.ticket_attachments enable row level security;
+alter table public.notifications_log enable row level security;
 
 -- ── Funções auxiliares de pesquisa (histórico + KB) ────────────────────
 -- Constroem um tsquery em OR a partir da pergunta do cliente SEM nunca
@@ -448,6 +480,11 @@ as $$
       where mm.conversation_id = cd.conversation_id
         and mm.role = 'assistant'
         and mm.created_at > cd.created_at
+        -- Um "ticket aberto" (source='ticket_ack', ver
+        -- core/services/chatService.ts) nunca é uma resposta real — nunca
+        -- reutilizar como se a pergunta já tivesse sido respondida (ver
+        -- supabase/migration_historico_ignorar_ticket_ack.sql).
+        and (mm.source is null or mm.source <> 'ticket_ack')
       order by mm.created_at asc
       limit 1
     ) as answer,

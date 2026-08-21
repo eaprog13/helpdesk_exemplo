@@ -33,10 +33,7 @@ export default async function PaginaHistoricoClienteAdmin({ params }: { params: 
       <div className="space-y-3">
         {conversas.map((conversa, i) => (
           <Link key={conversa.id} href={`/admin/clients/${id}/history/${conversa.id}`} className="block">
-            <Cartao
-              className="animate-entrada p-4 transition-[box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-md"
-              style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}
-            >
+            <Cartao interativo className="animate-entrada p-4" style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}>
               <p className="text-sm font-medium text-ink">{conversa.subject ?? "Conversa"}</p>
               <p className="mt-1 text-xs text-ink-300">{new Date(conversa.created_at).toLocaleString("pt-PT")}</p>
             </Cartao>

@@ -35,13 +35,16 @@ export interface Dependencias {
   whatsapp: RemetenteWhatsApp;
   armazenamento: RepositorioArmazenamento;
   /**
-   * Liga/desliga a "lapidação" de respostas de histórico/KB pela LLM (ver
-   * FornecedorLlm.humanizarResposta em core/ports/llm.ts) — decidido aqui,
-   * não dentro de core/services, para o core continuar sem ler variáveis
-   * de ambiente diretamente. Controlado por RESPOSTA_HUMANIZADA_ATIVA no
-   * .env; desligado por omissão enquanto os limiares de deteção de
-   * contexto (LIMIAR_RELEVANCIA_HISTORICO/BASE_CONHECIMENTO em
-   * chatService.ts) ainda estão a ser validados.
+   * Liga/desliga a "lapidação" pela LLM de texto já correto/aprovado
+   * (histórico, KB, saudação fixa, aviso de ticket aberto — ver
+   * FornecedorLlm.humanizarResposta em core/ports/llm.ts e
+   * core/services/chatService.ts, lapidarSeAtivo). Não afeta
+   * FornecedorLlm.gerarResposta (a resposta fundamentada na KB, ver
+   * mesmo ficheiro) — essa corre sempre que aplicável, independentemente
+   * deste interruptor. Decidido aqui, não dentro de core/services, para o
+   * core continuar sem ler variáveis de ambiente diretamente. Ativo
+   * por omissão — RESPOSTA_HUMANIZADA_ATIVA=false no .env é só um
+   * interruptor de emergência.
    */
   respostaHumanizadaAtiva: boolean;
 }

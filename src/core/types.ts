@@ -117,6 +117,13 @@ export interface Ticket {
   created_at: string;
   updated_at: string;
   resolved_at: string | null;
+  /**
+   * Quantas vezes o cliente devolveu este ticket ("preciso de mais alguma
+   * coisa" — ver responderClienteTicket em core/services/ticketService.ts).
+   * Nunca apagado (ao contrário de resolved_at) — usado no dashboard de
+   * estatísticas como proxy de satisfação do cliente.
+   */
+  reopened_count: number;
 }
 
 export interface AtualizacaoTicket {

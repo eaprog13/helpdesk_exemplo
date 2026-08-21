@@ -1,24 +1,29 @@
 import { clsx } from "clsx";
 
 const estilosEstado: Record<string, string> = {
+  // Estado do ticket — o SEU conjunto de cores próprio, nunca partilhado
+  // com departamento nem prioridade (ver dept.*/prio.* em tailwind.config.ts).
   open: "bg-warning/10 text-warning",
   in_progress: "bg-accent-light text-accent-hover",
   resolved: "bg-success/10 text-success",
   closed: "bg-ink-100 text-ink-400",
-  low: "bg-ink-50 text-ink-400",
-  normal: "bg-accent-light text-accent-hover",
-  high: "bg-warning/10 text-warning",
+  // Prioridade — rampa própria (dept.*/estado ficam de fora de propósito),
+  // ver comentário em tailwind.config.ts. "urgent" fica no danger — já
+  // não era partilhado por nenhum estado, sem necessidade de mudar.
+  low: "bg-prio-low/10 text-prio-low",
+  normal: "bg-prio-normal/10 text-prio-normal",
+  high: "bg-prio-high/10 text-prio-high",
   urgent: "bg-danger/10 text-danger",
   // Conversa sem ticket associado — respondida sem intervenção humana (ver
   // src/lib/format/estadoConversa.ts).
   auto: "bg-success/10 text-success",
-  // Departamento de um ticket (ver core/types.ts, Departamento) — "sem
-  // departamento" usa o mesmo tom neutro de "Fechado" (nem erro, nem
-  // destaque; só uma fila à espera de triagem).
-  desenvolvimento: "bg-accent-light text-accent-hover",
-  marketing: "bg-warning/10 text-warning",
-  design: "bg-success/10 text-success",
-  geral: "bg-ink-50 text-ink-400",
+  // Departamento de um ticket (ver core/types.ts, Departamento) — paleta
+  // própria (dept.* em tailwind.config.ts), nunca partilhada com estado
+  // nem prioridade: um cartão de ticket mostra os três lado a lado.
+  desenvolvimento: "bg-dept-dev/10 text-dept-dev",
+  marketing: "bg-dept-marketing/10 text-dept-marketing",
+  design: "bg-dept-design/10 text-dept-design",
+  geral: "bg-dept-geral/10 text-dept-geral",
   por_triar: "bg-ink-100 text-ink-400",
   // Tipo(s) de produto do cliente / de um artigo da KB (ver core/types.ts,
   // TipoSite) — tons neutros, não é um "estado", é só categoria.
