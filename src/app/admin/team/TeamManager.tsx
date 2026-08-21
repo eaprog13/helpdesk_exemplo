@@ -103,7 +103,7 @@ export function GestorEquipa({ equipaInicial }: { equipaInicial: Perfil[] }) {
               <legend className="mb-1.5 text-sm font-medium text-ink">
                 Departamento(s){" "}
                 <span className="font-normal text-ink-300">
-                  (decide que tickets recebe automaticamente — ver "Fila do departamento")
+                  (decide que tickets recebe automaticamente — ver &quot;Fila do departamento&quot;)
                 </span>
               </legend>
               <GrupoCaixasSelecao>

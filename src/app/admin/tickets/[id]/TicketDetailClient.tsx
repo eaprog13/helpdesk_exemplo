@@ -83,6 +83,9 @@ export function PainelDetalheTicket({
   useEffect(() => {
     if (!ticket.department) return;
     let cancelado = false;
+    // Padrão de "loading flag" documentado pelo próprio React para fetch em
+    // efeitos (define o estado de carregamento antes de disparar o pedido).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setACarregarEquipa(true);
     fetch(`/api/admin/team?departamento=${ticket.department}`)
       .then((r) => r.json())
