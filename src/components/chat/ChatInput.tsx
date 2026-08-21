@@ -51,8 +51,14 @@ export function CampoChat({ valor, aoAlterar, aoSubmeter, desativado }: Propried
   const [aOuvir, setAOuvir] = useState(false);
   const [erroDitado, setErroDitado] = useState<string | null>(null);
 
-  refValorAtual.current = valor;
-  refAoSubmeter.current = aoSubmeter;
+  // Mantém as refs atualizadas para uso dentro dos handlers do
+  // SpeechRecognition (definidos uma vez em alternarDitado, não recriados a
+  // cada render) — feito num efeito, não durante o render, para não mutar
+  // refs enquanto o React ainda está a renderizar.
+  useEffect(() => {
+    refValorAtual.current = valor;
+    refAoSubmeter.current = aoSubmeter;
+  });
 
   function limparTimeoutSilencio() {
     if (refTimeoutSilencio.current !== null) {
@@ -68,6 +74,10 @@ export function CampoChat({ valor, aoAlterar, aoSubmeter, desativado }: Propried
   // o botão só aparece quando está mesmo disponível.
   useEffect(() => {
     const construtor = window.SpeechRecognition ?? window.webkitSpeechRecognition;
+    // Deteção só é possível no cliente (SSR não tem "window"); calcular isto
+    // durante o render causaria mismatch de hidratação, por isso tem de
+    // ficar num efeito — mesmo assim dispara o aviso genérico da regra.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSuportaDitado(!!construtor);
     return () => {
       refReconhecimento.current?.stop();

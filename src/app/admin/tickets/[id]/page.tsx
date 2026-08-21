@@ -7,18 +7,19 @@ export default async function PaginaDetalheTicketAdmin({ params }: { params: Pro
   const { id } = await params;
   const { perfil, dependencias } = await exigirPapel(["admin", "dev"]);
 
+  let dados: Awaited<ReturnType<typeof obterTicketComAtualizacoes>>;
   try {
-    const { ticket, atualizacoes, anexos } = await obterTicketComAtualizacoes(dependencias, perfil, id);
-    return (
-      <PainelDetalheTicket
-        ticket={ticket}
-        atualizacoes={atualizacoes}
-        anexos={anexos}
-        perfilAtual={{ id: perfil.id, role: perfil.role, department: perfil.department }}
-      />
-    );
+    dados = await obterTicketComAtualizacoes(dependencias, perfil, id);
   } catch (erro) {
     if (erro instanceof ErroNaoEncontrado || erro instanceof ErroAcessoNegado) notFound();
     throw erro;
   }
+  return (
+    <PainelDetalheTicket
+      ticket={dados.ticket}
+      atualizacoes={dados.atualizacoes}
+      anexos={dados.anexos}
+      perfilAtual={{ id: perfil.id, role: perfil.role, department: perfil.department }}
+    />
+  );
 }

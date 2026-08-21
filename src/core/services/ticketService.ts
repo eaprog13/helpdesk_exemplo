@@ -636,7 +636,7 @@ export async function atualizarTicket(
   if (departamento !== undefined) alteracoes.departamento = departamento;
   if (estado === "resolved") alteracoes.dataResolucao = new Date().toISOString();
 
-  let ticket =
+  const ticket =
     Object.keys(alteracoes).length > 0
       ? await dependencias.tickets.atualizar(idTicket, alteracoes)
       : ticketAtual;

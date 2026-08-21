@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type SVGProps } from "react";
+import { useState, type SVGProps } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { clsx } from "clsx";
@@ -64,7 +64,14 @@ export function Cabecalho({
   // sair) — a área admin não usa isto, tem "aoAlternarMenuLateral" para a
   // sidebar. Fecha sozinho ao mudar de página.
   const [menuAberto, setMenuAberto] = useState(false);
-  useEffect(() => setMenuAberto(false), [caminhoAtual]);
+  // Fecha o menu quando o caminho muda, sem useEffect: ajustar estado
+  // durante o render em resposta a uma prop que mudou é o padrão
+  // recomendado pelo React (evita o re-render extra de um efeito).
+  const [caminhoAnterior, setCaminhoAnterior] = useState(caminhoAtual);
+  if (caminhoAtual !== caminhoAnterior) {
+    setCaminhoAnterior(caminhoAtual);
+    setMenuAberto(false);
+  }
 
   async function terminarSessao() {
     const supabase = criarClienteSupabase();
@@ -95,6 +102,7 @@ export function Cabecalho({
               className="h-8 w-8 shrink-0 rounded-lg object-contain bg-white border border-ink-100"
             />
           ) : (
+            // eslint-disable-next-line @next/next/no-img-element -- ícone estático de 32px, sem ganho real com next/image aqui
             <img src="/icon.png" alt="Vértice Digital" className="h-8 w-8 shrink-0 rounded-lg" />
           )}
           <div className="min-w-0">

@@ -159,7 +159,7 @@ export function GestorBaseConhecimento({
 
             {!souAdmin && (
               <p className="text-xs text-ink-300">
-                Entra como rascunho — só um admin pode publicar (ver "Entradas" ao lado).
+                Entra como rascunho — só um admin pode publicar (ver &quot;Entradas&quot; ao lado).
               </p>
             )}
             {erro && <p className="text-sm text-danger">{erro}</p>}

@@ -7,11 +7,12 @@ export default async function PaginaDetalheHistoricoCliente({ params }: { params
   const { id } = await params;
   const { perfil, dependencias } = await exigirUtilizador();
 
+  let dados: Awaited<ReturnType<typeof obterConversaComMensagens>>;
   try {
-    const { conversa, mensagens } = await obterConversaComMensagens(dependencias, perfil, id);
-    return <VistaHistoricoConversa conversa={conversa} mensagens={mensagens} />;
+    dados = await obterConversaComMensagens(dependencias, perfil, id);
   } catch (erro) {
     if (erro instanceof ErroNaoEncontrado || erro instanceof ErroAcessoNegado) notFound();
     throw erro;
   }
+  return <VistaHistoricoConversa conversa={dados.conversa} mensagens={dados.mensagens} />;
 }
