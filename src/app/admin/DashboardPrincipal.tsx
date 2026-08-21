@@ -46,7 +46,7 @@ function CartaoEstatistica({
   atraso,
 }: {
   rotulo: string;
-  valor: number;
+  valor: number | string;
   sufixo?: string;
   corTexto?: string;
   descricao: string;
@@ -208,9 +208,12 @@ export function PainelPrincipal({ estatisticas, papel }: { estatisticas: Estatis
             />
             <CartaoEstatistica
               rotulo="Tempo médio de resolução"
-              valor={g.tempoMedioResolucaoMs === null ? 0 : Math.round(g.tempoMedioResolucaoMs / 3_600_000)}
-              sufixo="h"
-              descricao={g.tempoMedioResolucaoMs === null ? "Ainda sem ticket resolvido." : `${formatarDuracao(g.tempoMedioResolucaoMs)} em média`}
+              // formatarDuracao já escolhe a unidade certa (min/h/dias) — um
+              // Math.round(ms / 3_600_000) fixo em horas mostrava sempre "0h"
+              // para médias abaixo de 1h, mesmo a descrição por baixo já
+              // mostrando os minutos corretamente.
+              valor={g.tempoMedioResolucaoMs === null ? "—" : formatarDuracao(g.tempoMedioResolucaoMs)}
+              descricao={g.tempoMedioResolucaoMs === null ? "Ainda sem ticket resolvido." : "em média"}
               atraso={280}
             />
             <CartaoEstatistica

@@ -18,7 +18,14 @@ Regras importantes:
   ex.: "o que é SEO") desde que fique claro que é uma explicação geral, não um procedimento
   oficial da Vértice Digital.
 - Sê conciso: preferes respostas de poucos parágrafos ou uma lista de passos.
-- Termina sempre a informar que, por segurança, um colaborador humano vai rever este caso.`;
+- Nunca uses sintaxe markdown (**negrito**, *itálico*, \`código\`, #títulos, --- etc.) — a bolha
+  do chat mostra o texto tal como escreves, sem interpretar markdown, por isso esses símbolos
+  apareceriam literalmente ao cliente. Escreve em texto simples.
+- Evita parênteses em excesso — prefere frases curtas e diretas a informação entre parênteses.
+- Quando a resposta envolver vários passos a seguir, apresenta-os como uma lista numerada (uma
+  linha por passo, "1.", "2.", ...), nunca dentro de uma única frase corrida.
+- Não termines a informar que um colaborador humano vai rever o caso — essa informação já é
+  mostrada sempre, fora da mensagem (aviso fixo por baixo da caixa de pergunta).`;
 
 export function construirPromptUtilizador(pedido: PedidoRespostaLlm): string {
   const blocoContexto =
@@ -58,7 +65,11 @@ Regras importantes:
 - Não acrescentes nenhum facto, prazo, valor ou instrução que não esteja no conteúdo base, e
   não removas nenhum dos que lá estão.
 - Não inventes procedimentos, prazos ou valores que não constem do conteúdo base.
-- Se o conteúdo base tiver uma lista de passos, mantém-na como lista.
+- Se o conteúdo base tiver uma lista de passos, mantém-na como lista numerada, uma linha por
+  passo — nunca a comprimas numa única frase corrida.
+- Nunca uses sintaxe markdown (**negrito**, *itálico*, \`código\`, #títulos, --- etc.) — a bolha
+  do chat mostra o texto tal como escreves, sem interpretar markdown. Escreve em texto simples,
+  e evita parênteses em excesso.
 - Mantém a resposta concisa — reescrever não é alongar.
 - Devolve só a resposta final, sem comentários sobre o que fizeste.`;
 
