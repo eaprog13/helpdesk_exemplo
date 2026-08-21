@@ -180,6 +180,238 @@ export async function listarTickets(dependencias: Dependencias, perfil: Perfil):
   return todos;
 }
 
+const TODOS_DEPARTAMENTOS: Departamento[] = ["desenvolvimento", "marketing", "design", "geral"];
+
+export interface ContagemEstados {
+  aberto: number;
+  emCurso: number;
+  resolvido: number;
+  fechado: number;
+  total: number;
+}
+
+export interface MetricasDepartamento {
+  departamento: Departamento;
+  estados: ContagemEstados;
+  /** Fila do departamento: abertos, ainda sem dev atribuído. */
+  porAtribuir: number;
+  tempoMedioResolucaoMs: number | null;
+  taxaReabertura: number | null;
+}
+
+export interface MetricasDev {
+  idDev: string;
+  nome: string;
+  /** Departamento(s) desta pessoa — para a UI poder filtrar a lista por departamento. */
+  departamentos: Departamento[];
+  /** Abertos + em curso, atribuídos a esta pessoa neste momento. */
+  atribuidosAtivos: number;
+  /** Fechados de sempre — ver nota em fechadosPorDev antes desta reescrita. */
+  resolvidosTotal: number;
+  tempoMedioResolucaoMs: number | null;
+  taxaReabertura: number | null;
+}
+
+export interface EstatisticasTickets {
+  /**
+   * Fotografia à escala da empresa toda — só para admin (ver
+   * obterEstatisticasTickets): um dev, por princípio de menor privilégio
+   * (mesmo já aplicado a listarTickets/devPodeVerTicket), não vê volumes
+   * de departamentos que não são o seu.
+   */
+  global: {
+    estados: ContagemEstados;
+    clientesAtivos: number;
+    porAtribuir: number;
+    tempoMedioResolucaoMs: number | null;
+    totalConsiderado: number;
+    taxaReabertura: number | null;
+    ticketsConsideradosReabertura: number;
+  } | null;
+  /** Admin: todos os departamentos. Dev: só o(s) seu(s). */
+  porDepartamento: MetricasDepartamento[];
+  /** Admin: toda a equipa, ordenado por resolvidosTotal. Dev: só a própria linha. */
+  porDev: MetricasDev[];
+  /** Frases curtas, já prontas a mostrar — ver gerarInsights. */
+  insights: string[];
+}
+
+function contarEstados(tickets: Ticket[]): ContagemEstados {
+  return {
+    aberto: tickets.filter((t) => t.status === "open").length,
+    emCurso: tickets.filter((t) => t.status === "in_progress").length,
+    resolvido: tickets.filter((t) => t.status === "resolved").length,
+    fechado: tickets.filter((t) => t.status === "closed").length,
+    total: tickets.length,
+  };
+}
+
+/** Ver EstatisticasTickets.tempoMedioResolucaoMs — mesmo critério em qualquer escala (global/departamento/dev). */
+function tempoMedioResolucao(tickets: Ticket[]): number | null {
+  const duracoes = tickets
+    .filter((t) => (t.status === "resolved" || t.status === "closed") && t.resolved_at)
+    .map((t) => new Date(t.resolved_at as string).getTime() - new Date(t.created_at).getTime())
+    .filter((ms) => ms >= 0); // defesa contra relógios/dados inconsistentes, nunca negativo
+  return duracoes.length > 0 ? duracoes.reduce((soma, ms) => soma + ms, 0) / duracoes.length : null;
+}
+
+/** Ver EstatisticasTickets — proxy de satisfação, mesmo critério em qualquer escala. */
+function taxaReaberturaDe(tickets: Ticket[]): number | null {
+  const comResolucaoAlgumaVez = tickets.filter((t) => t.status === "resolved" || t.status === "closed" || t.reopened_count > 0);
+  return comResolucaoAlgumaVez.length > 0
+    ? comResolucaoAlgumaVez.filter((t) => t.reopened_count > 0).length / comResolucaoAlgumaVez.length
+    : null;
+}
+
+function formatarHoras(ms: number): string {
+  const horas = ms / 3_600_000;
+  return horas < 1 ? "menos de 1h" : `${Math.round(horas)}h`;
+}
+
+const ROTULO_DEPARTAMENTO: Record<Departamento, string> = {
+  desenvolvimento: "Desenvolvimento",
+  marketing: "Marketing Digital",
+  design: "Branding/Design",
+  geral: "Geral",
+};
+
+/**
+ * Conclusões curtas, já em português e prontas a mostrar — para não
+ * obrigar quem está a ler o dashboard a comparar números de cabeça. Cada
+ * uma só aparece se houver dados suficientes para a sustentar (nunca
+ * "adivinha" com uma amostra vazia).
+ */
+function gerarInsights(estatisticas: Omit<EstatisticasTickets, "insights">): string[] {
+  const insights: string[] = [];
+
+  if (estatisticas.global) {
+    const g = estatisticas.global;
+    if (g.porAtribuir > 0) {
+      insights.push(`${g.porAtribuir} ticket(s) estão por atribuir — à espera de um admin lhes dar departamento.`);
+    }
+    if (g.taxaReabertura !== null) {
+      const pct = Math.round(g.taxaReabertura * 100);
+      const leitura = pct <= 15 ? "saudável" : pct <= 30 ? "a merecer atenção" : "crítica";
+      insights.push(`Taxa de reabertura global em ${pct}% — ${leitura}.`);
+    }
+  }
+
+  if (estatisticas.porDepartamento.length > 1) {
+    const comFila = estatisticas.porDepartamento.filter((d) => d.porAtribuir > 0);
+    if (comFila.length > 0) {
+      const maior = comFila.reduce((a, b) => (b.porAtribuir > a.porAtribuir ? b : a));
+      insights.push(
+        `${ROTULO_DEPARTAMENTO[maior.departamento]} tem a maior fila por assumir (${maior.porAtribuir}) — pode ser onde vale mais a pena reforçar.`
+      );
+    }
+    const comTempo = estatisticas.porDepartamento.filter((d) => d.tempoMedioResolucaoMs !== null);
+    if (comTempo.length > 1) {
+      const maisLento = comTempo.reduce((a, b) => (b.tempoMedioResolucaoMs! > a.tempoMedioResolucaoMs! ? b : a));
+      const maisRapido = comTempo.reduce((a, b) => (b.tempoMedioResolucaoMs! < a.tempoMedioResolucaoMs! ? b : a));
+      if (maisLento.departamento !== maisRapido.departamento) {
+        insights.push(
+          `${ROTULO_DEPARTAMENTO[maisRapido.departamento]} resolve mais depressa (${formatarHoras(maisRapido.tempoMedioResolucaoMs!)} em média) do que ${ROTULO_DEPARTAMENTO[maisLento.departamento]} (${formatarHoras(maisLento.tempoMedioResolucaoMs!)}).`
+        );
+      }
+    }
+  } else if (estatisticas.porDepartamento.length === 1) {
+    const d = estatisticas.porDepartamento[0]!;
+    if (d.porAtribuir > 0) {
+      insights.push(`A fila do teu departamento tem ${d.porAtribuir} ticket(s) por assumir.`);
+    }
+    if (d.tempoMedioResolucaoMs !== null) {
+      insights.push(`O teu departamento resolve em ${formatarHoras(d.tempoMedioResolucaoMs)}, em média.`);
+    }
+  }
+
+  if (estatisticas.porDev.length > 1) {
+    const comResolvidos = estatisticas.porDev.filter((d) => d.resolvidosTotal > 0);
+    if (comResolvidos.length > 0) {
+      const maisAtivo = comResolvidos.reduce((a, b) => (b.resolvidosTotal > a.resolvidosTotal ? b : a));
+      insights.push(`${maisAtivo.nome} é quem mais tickets já fechou (${maisAtivo.resolvidosTotal}).`);
+    }
+    const comTempo = estatisticas.porDev.filter((d) => d.tempoMedioResolucaoMs !== null);
+    if (comTempo.length > 0) {
+      const maisRapido = comTempo.reduce((a, b) => (b.tempoMedioResolucaoMs! < a.tempoMedioResolucaoMs! ? b : a));
+      insights.push(`${maisRapido.nome} tem o tempo médio de resolução mais rápido (${formatarHoras(maisRapido.tempoMedioResolucaoMs!)}).`);
+    }
+  } else if (estatisticas.porDev.length === 1) {
+    const d = estatisticas.porDev[0]!;
+    if (d.atribuidosAtivos > 0) {
+      insights.push(`Tens ${d.atribuidosAtivos} ticket(s) atribuído(s) em aberto ou em curso.`);
+    }
+  }
+
+  return insights;
+}
+
+/**
+ * Estatísticas para /admin (Global, Por departamento, Individual — ver
+ * PainelEstatisticasTickets). Calculadas em memória a partir de
+ * listarTodos(), tal como o resto dos contadores desta app: o volume de
+ * tickets é tipicamente pequeno, não vale a pena uma agregação em SQL só
+ * para isto.
+ *
+ * Âmbito por papel — mesmo princípio de menor privilégio de
+ * listarTickets/devPodeVerTicket: um admin vê tudo (global + todos os
+ * departamentos + toda a equipa); um dev nunca vê números da empresa
+ * toda nem de outro departamento — só o(s) seu(s) departamento(s) e a
+ * própria linha individual.
+ */
+export async function obterEstatisticasTickets(dependencias: Dependencias, perfil: Perfil): Promise<EstatisticasTickets> {
+  const [todosOsTickets, equipa] = await Promise.all([dependencias.tickets.listarTodos(), dependencias.perfis.listarEquipa()]);
+  const nomePorDev = new Map(equipa.map((dev) => [dev.id, dev.full_name]));
+
+  const departamentosVisiveis = perfil.role === "admin" ? TODOS_DEPARTAMENTOS : perfil.department;
+  const devsVisiveis = perfil.role === "admin" ? equipa : equipa.filter((dev) => dev.id === perfil.id);
+
+  const porDepartamento: MetricasDepartamento[] = departamentosVisiveis.map((departamento) => {
+    const ticketsDoDept = todosOsTickets.filter((t) => t.department === departamento);
+    return {
+      departamento,
+      estados: contarEstados(ticketsDoDept),
+      porAtribuir: ticketsDoDept.filter((t) => t.status === "open" && !t.assigned_dev_id).length,
+      tempoMedioResolucaoMs: tempoMedioResolucao(ticketsDoDept),
+      taxaReabertura: taxaReaberturaDe(ticketsDoDept),
+    };
+  });
+
+  const porDev: MetricasDev[] = devsVisiveis
+    .map((dev) => {
+      const ticketsDoDev = todosOsTickets.filter((t) => t.assigned_dev_id === dev.id);
+      const fechados = ticketsDoDev.filter((t) => t.status === "closed");
+      return {
+        idDev: dev.id,
+        nome: nomePorDev.get(dev.id) ?? "—",
+        departamentos: dev.department,
+        atribuidosAtivos: ticketsDoDev.filter((t) => t.status === "open" || t.status === "in_progress").length,
+        resolvidosTotal: fechados.length,
+        tempoMedioResolucaoMs: tempoMedioResolucao(ticketsDoDev),
+        taxaReabertura: taxaReaberturaDe(ticketsDoDev),
+      };
+    })
+    .sort((a, b) => b.resolvidosTotal - a.resolvidosTotal);
+
+  let global: EstatisticasTickets["global"] = null;
+  if (perfil.role === "admin") {
+    const clientes = await dependencias.perfis.listarClientes();
+    global = {
+      estados: contarEstados(todosOsTickets),
+      clientesAtivos: clientes.length,
+      porAtribuir: todosOsTickets.filter((t) => !t.department).length,
+      tempoMedioResolucaoMs: tempoMedioResolucao(todosOsTickets),
+      totalConsiderado: todosOsTickets.filter((t) => (t.status === "resolved" || t.status === "closed") && t.resolved_at).length,
+      taxaReabertura: taxaReaberturaDe(todosOsTickets),
+      ticketsConsideradosReabertura: todosOsTickets.filter(
+        (t) => t.status === "resolved" || t.status === "closed" || t.reopened_count > 0
+      ).length,
+    };
+  }
+
+  const base = { global, porDepartamento, porDev };
+  return { ...base, insights: gerarInsights(base) };
+}
+
 export async function obterTicketComAtualizacoes(dependencias: Dependencias, perfil: Perfil, idTicket: string) {
   const ticket = await dependencias.tickets.obterPorId(idTicket);
   if (!ticket) throw new ErroNaoEncontrado("Ticket não encontrado.");
@@ -229,6 +461,27 @@ export async function adicionarAnexoTicket(
   }
   if (perfil.role === "dev" && !devPodeVerTicket(perfil, ticket)) {
     throw new ErroAcessoNegado("Este ticket não é do seu departamento.");
+  }
+  // Cada lado só pode anexar enquanto é "a sua vez" (ver o fluxo grande em
+  // atualizarTicket abaixo) — um admin nunca fica bloqueado.
+  //   • cliente: ao descrever o pedido (open) ou ao confirmar/devolver uma
+  //     resposta (resolved) — nunca enquanto "em resolução" (aguarda o
+  //     dev) nem depois de "fechado".
+  //   • dev: enquanto ainda está a tratar do pedido (open/in_progress) —
+  //     nunca depois de já ter entregue a resposta (resolved/closed).
+  if (perfil.role === "client" && ticket.status !== "open" && ticket.status !== "resolved") {
+    throw new ErroAcessoNegado(
+      ticket.status === "in_progress"
+        ? 'O pedido está "em resolução" — aguarde a resposta antes de anexar mais ficheiros.'
+        : "Este pedido já está fechado."
+    );
+  }
+  if (perfil.role === "dev" && ticket.status !== "open" && ticket.status !== "in_progress") {
+    throw new ErroAcessoNegado(
+      ticket.status === "resolved"
+        ? "Já entregou a resposta — aguarde a confirmação do cliente antes de alterar o pedido."
+        : "Este pedido já está fechado."
+    );
   }
 
   const extensao = TIPOS_ANEXO_PERMITIDOS[dados.tipoConteudo];
@@ -346,6 +599,20 @@ export async function atualizarTicket(
     // o id, mesmo sem nunca o ver listado.
     throw new ErroAcessoNegado("Este ticket não é do seu departamento.");
   }
+  // Um dev não pode alterar nada (nota, prioridade, reatribuição) depois
+  // de já ter entregue a resposta — fica à espera que o cliente confirme
+  // ou devolva o pedido (ver responderClienteTicket); "fechado" é sempre
+  // terminal. Nem sequer vale a pena olhar para "estado" aqui: TRANSICOES_DEV
+  // já não tem nenhuma transição válida a partir de "resolved"/"closed"
+  // para um dev, por isso isto cobre também esse caso. Um admin nunca fica
+  // bloqueado — pode sempre corrigir um engano.
+  if (perfilEquipa.role === "dev" && (ticketAtual.status === "resolved" || ticketAtual.status === "closed")) {
+    throw new ErroAcessoNegado(
+      ticketAtual.status === "resolved"
+        ? "Já entregou a resposta — aguarde a confirmação do cliente antes de alterar o pedido."
+        : "Este pedido já está fechado."
+    );
+  }
 
   const mudaEstado = !!estado && estado !== ticketAtual.status;
 
@@ -455,6 +722,11 @@ export async function responderClienteTicket(
     // Ao reabrir, o ticket volta a estar por resolver — limpa a data de
     // resolução anterior para uma futura reabertura/fecho ficar correta.
     dataResolucao: dados.acao === "reabrir" ? null : undefined,
+    // Ao contrário de dataResolucao, isto nunca se apaga — é o único
+    // rasto que sobrevive a um ciclo resolvido→reaberto (ver
+    // migration_contador_reaberturas.sql), usado no dashboard de
+    // estatísticas como proxy de satisfação do cliente.
+    reopenedCount: dados.acao === "reabrir" ? ticketAtual.reopened_count + 1 : undefined,
   });
   if (!ticket) throw new ErroNaoEncontrado("Ticket não encontrado.");
 

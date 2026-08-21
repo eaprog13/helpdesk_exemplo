@@ -5,6 +5,7 @@ import { Cartao } from "@/components/ui/Card";
 import { Campo } from "@/components/ui/Input";
 import { Botao } from "@/components/ui/Button";
 import { Distintivo } from "@/components/ui/Badge";
+import { CaixaSelecao, GrupoCaixasSelecao } from "@/components/ui/Checkbox";
 import type { Departamento, Perfil } from "@/core/types";
 
 // Mesma lista/ordem usada em ClientsManager.tsx e OpenTicketButton.tsx —
@@ -105,20 +106,18 @@ export function GestorEquipa({ equipaInicial }: { equipaInicial: Perfil[] }) {
                   (decide que tickets recebe automaticamente — ver "Fila do departamento")
                 </span>
               </legend>
-              <div className="flex flex-wrap gap-3">
+              <GrupoCaixasSelecao>
                 {DEPARTAMENTOS_EQUIPA.map((d) => (
-                  <label key={d.valor} className="flex items-center gap-1.5 text-sm text-ink-400">
-                    <input
-                      type="checkbox"
-                      checked={formulario.departamentos.includes(d.valor)}
-                      onChange={() =>
-                        setFormulario({ ...formulario, departamentos: alternarNaLista(formulario.departamentos, d.valor) })
-                      }
-                    />
-                    {d.rotulo}
-                  </label>
+                  <CaixaSelecao
+                    key={d.valor}
+                    rotulo={d.rotulo}
+                    checked={formulario.departamentos.includes(d.valor)}
+                    onChange={() =>
+                      setFormulario({ ...formulario, departamentos: alternarNaLista(formulario.departamentos, d.valor) })
+                    }
+                  />
                 ))}
-              </div>
+              </GrupoCaixasSelecao>
             </fieldset>
 
             {erro && <p className="text-sm text-danger">{erro}</p>}
@@ -194,7 +193,7 @@ function CartaoMembro({
   }
 
   return (
-    <Cartao className="animate-entrada p-3" style={{ animationDelay: `${atraso}ms` }}>
+    <Cartao interativo selecionado={aEditar} className="animate-entrada p-3" style={{ animationDelay: `${atraso}ms` }}>
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-sm font-medium text-ink">{membro.full_name}</p>
@@ -209,7 +208,15 @@ function CartaoMembro({
                 <span className="text-xs text-ink-300">Sem departamento</span>
               )}
             </div>
-            <Botao variant="secondary" size="sm" onClick={abrirEdicao}>
+            {/* Hover igual ao botão "Criar conta e enviar credenciais" (variant
+                primary, sem overrides) — bg-ink-700 + texto branco — em vez do
+                hover claro por omissão do variant secondary. */}
+            <Botao
+              variant="secondary"
+              size="sm"
+              onClick={abrirEdicao}
+              className="hover:!border-ink-700 hover:!bg-ink-700 hover:!text-white"
+            >
               Editar
             </Botao>
           </div>
@@ -230,18 +237,16 @@ function CartaoMembro({
             ))}
           </select>
 
-          <div className="flex flex-wrap gap-3">
+          <GrupoCaixasSelecao>
             {DEPARTAMENTOS_EQUIPA.map((d) => (
-              <label key={d.valor} className="flex items-center gap-1.5 text-sm text-ink-400">
-                <input
-                  type="checkbox"
-                  checked={departamentos.includes(d.valor)}
-                  onChange={() => setDepartamentos(alternarNaLista(departamentos, d.valor))}
-                />
-                {d.rotulo}
-              </label>
+              <CaixaSelecao
+                key={d.valor}
+                rotulo={d.rotulo}
+                checked={departamentos.includes(d.valor)}
+                onChange={() => setDepartamentos(alternarNaLista(departamentos, d.valor))}
+              />
             ))}
-          </div>
+          </GrupoCaixasSelecao>
 
           {erro && <p className="text-sm text-danger">{erro}</p>}
 

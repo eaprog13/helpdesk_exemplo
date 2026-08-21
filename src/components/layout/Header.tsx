@@ -10,7 +10,7 @@ import { BotaoAbrirTicket } from "@/components/ticket/OpenTicketButton";
 interface PropriedadesCabecalho {
   nomeCompleto: string;
   nomeEmpresa: string | null;
-  /** Logótipo próprio do cliente (empresa), se tiver sido carregado pelo admin. Sem isto, mostra o "V" da Vértice. */
+  /** Logótipo próprio do cliente (empresa), se tiver sido carregado pelo admin. Sem isto, mostra o "V" da Vértice Digital. */
   logoUrl?: string | null;
   /**
    * Mostra as abas "Falar connosco", "Os meus pedidos" e "Histórico" —

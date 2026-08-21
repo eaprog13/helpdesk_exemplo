@@ -128,6 +128,7 @@ export interface RepositorioTicket {
       idDevAtribuido: string | null;
       departamento: Departamento | null;
       dataResolucao: string | null;
+      reopenedCount: number;
     }>
   ): Promise<Ticket | null>;
   /**

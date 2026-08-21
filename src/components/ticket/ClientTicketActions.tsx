@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Cartao } from "@/components/ui/Card";
 import { Botao } from "@/components/ui/Button";
+import { VerificacaoAnimada } from "@/components/ui/SuccessCheck";
 
 /**
  * O passo do cliente no fluxo do ticket (ver o comentário sobre o fluxo em
@@ -45,7 +46,10 @@ export function AcoesTicketCliente({ idTicket }: { idTicket: string }) {
 
   return (
     <Cartao className="mb-4 border-accent/30 bg-accent-light/40 p-4">
-      <p className="mb-1 text-sm font-medium text-ink">O seu pedido foi marcado como resolvido</p>
+      <div className="mb-1 flex items-center gap-2.5">
+        <VerificacaoAnimada tamanho={28} />
+        <p className="text-sm font-medium text-ink">O seu pedido foi marcado como resolvido</p>
+      </div>
       <p className="mb-3 text-xs text-ink-400">
         Confirme se ficou tudo bem ou diga-nos o que ainda falta — o pedido volta à nossa equipa.
       </p>

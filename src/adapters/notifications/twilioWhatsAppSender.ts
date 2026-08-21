@@ -39,7 +39,7 @@ export class RemetenteWhatsAppTwilio implements RemetenteWhatsApp {
   async enviarTicketCriado(telefoneE164: string, nomeCompleto: string, ticket: Ticket): Promise<ResultadoEnvio> {
     return this.enviar(
       telefoneE164,
-      `Olá ${nomeCompleto}, a Vértice registou o seu pedido (ticket #${ticket.id.slice(
+      `Olá ${nomeCompleto}, a Vértice Digital registou o seu pedido (ticket #${ticket.id.slice(
         0,
         8
       )}). A nossa equipa vai analisar e voltamos a contactá-lo em breve.`
@@ -52,7 +52,7 @@ export class RemetenteWhatsAppTwilio implements RemetenteWhatsApp {
       `Olá ${nomeCompleto}, o seu ticket #${ticket.id.slice(
         0,
         8
-      )} junto da Vértice foi resolvido. Consulte os detalhes na plataforma de apoio ao cliente.`
+      )} junto da Vértice Digital foi resolvido. Consulte os detalhes na plataforma de apoio ao cliente.`
     );
   }
 }

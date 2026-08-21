@@ -61,9 +61,15 @@ function construirFornecedorLlm(): FornecedorLlm {
         process.env.OPENAI_MODEL ?? "gpt-4o-mini"
       );
     case "groq":
+      // Lista de modelos disponíveis muda com frequência (a Groq
+      // descontinua modelos antigos) — confirmar em
+      // https://console.groq.com/docs/models ou GET /openai/v1/models
+      // antes de mudar. "openai/gpt-oss-120b" (bom para qualidade de
+      // texto) e "openai/gpt-oss-20b" (mais rápido/barato) estavam
+      // ambos disponíveis em 2026-08-20.
       return new FornecedorLlmGroq(
         process.env.GROQ_API_KEY ?? "",
-        process.env.GROQ_MODEL ?? "llama-3.3-70b-versatile"
+        process.env.GROQ_MODEL ?? "openai/gpt-oss-120b"
       );
     case "anthropic":
     default:
@@ -104,7 +110,7 @@ export function obterContentor(): Dependencias {
     llm: construirFornecedorLlm(),
     email: new RemetenteEmailResend(
       process.env.RESEND_API_KEY ?? "",
-      process.env.EMAIL_FROM ?? "Apoio ao Cliente Vértice <suporte@vertice-digital.example>",
+      process.env.EMAIL_FROM ?? "Apoio ao Cliente Vértice Digital <suporte@vertice-digital.example>",
       process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
     ),
     whatsapp: new RemetenteWhatsAppTwilio(
@@ -113,7 +119,13 @@ export function obterContentor(): Dependencias {
       process.env.TWILIO_WHATSAPP_FROM ?? "",
       process.env.WHATSAPP_NOTIFICATIONS_ENABLED === "true"
     ),
-    respostaHumanizadaAtiva: process.env.RESPOSTA_HUMANIZADA_ATIVA === "true",
+    // Ativo por omissão (ver core/services/chatService.ts, lapidarSeAtivo)
+    // — não é funcionalidade experimental. RESPOSTA_HUMANIZADA_ATIVA=false
+    // no .env é só um interruptor de emergência (ex.: fornecedor de LLM
+    // em baixo), não o estado normal. Só afeta a "lapidação" de texto já
+    // pronto — gerarResposta (resposta nova, fundamentada na KB) não
+    // depende deste interruptor.
+    respostaHumanizadaAtiva: process.env.RESPOSTA_HUMANIZADA_ATIVA !== "false",
   };
 
   return dependenciasEmCache;

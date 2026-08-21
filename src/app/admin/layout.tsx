@@ -4,8 +4,10 @@ import { BarraLateral } from "@/components/layout/Sidebar";
 import { Cabecalho } from "@/components/layout/Header";
 import type { Perfil } from "@/core/types";
 
+// "Resumo" e "Dashboard" fundiram-se num só (ver admin/page.tsx +
+// DashboardPrincipal.tsx) — só fica uma entrada, já em "/admin".
 const ITENS_NAVEGACAO_ADMIN = [
-  { href: "/admin", rotulo: "Resumo" },
+  { href: "/admin", rotulo: "Dashboard" },
   { href: "/admin/tickets", rotulo: "Tickets" },
   { href: "/admin/clients", rotulo: "Clientes" },
   // Gere as contas de dev/admin e o(s) seu(s) departamento(s) — só admin
@@ -28,7 +30,7 @@ const ITENS_NAVEGACAO_ADMIN = [
 // outro departamento, mesmo nesta aba (ver listarTickets/devPodeVerTicket
 // em ticketService.ts).
 const ITENS_NAVEGACAO_DEV = [
-  { href: "/admin", rotulo: "Resumo" },
+  { href: "/admin", rotulo: "Dashboard" },
   { href: "/admin/tickets?vista=meus", rotulo: "Os meus tickets" },
   { href: "/admin/tickets?vista=fila", rotulo: "Fila do departamento" },
   { href: "/admin/tickets?vista=todos", rotulo: "Todos do meu departamento" },
@@ -50,7 +52,9 @@ export default async function LayoutAdmin({ children }: { children: React.ReactN
     <div className="flex h-screen bg-surface">
       <BarraLateral
         itens={perfil.role === "dev" ? ITENS_NAVEGACAO_DEV : ITENS_NAVEGACAO_ADMIN}
-        rotuloMarca="Vértice · Dev"
+        rotuloMarca="Vértice Digital"
+        papel={perfil.role === "dev" ? "dev" : "admin"}
+        departamentos={perfil.department}
       />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Cabecalho

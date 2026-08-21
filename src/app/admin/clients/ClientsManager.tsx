@@ -6,6 +6,7 @@ import { Cartao } from "@/components/ui/Card";
 import { Campo } from "@/components/ui/Input";
 import { Botao } from "@/components/ui/Button";
 import { Distintivo } from "@/components/ui/Badge";
+import { CaixaSelecao, GrupoCaixasSelecao } from "@/components/ui/Checkbox";
 import type { Departamento, Perfil, TipoSite } from "@/core/types";
 
 // Serviço(s) que o cliente TEM contratado com a Vértice — mostrado como
@@ -118,20 +119,18 @@ export function GestorClientes({ clientesIniciais }: { clientesIniciais: Perfil[
 
             <fieldset>
               <legend className="mb-1.5 text-sm font-medium text-ink">Serviço(s)</legend>
-              <div className="flex flex-wrap gap-3">
+              <GrupoCaixasSelecao>
                 {TIPOS_SITE.map((t) => (
-                  <label key={t.valor} className="flex items-center gap-1.5 text-sm text-ink-400">
-                    <input
-                      type="checkbox"
-                      checked={formulario.tiposSite.includes(t.valor)}
-                      onChange={() =>
-                        setFormulario({ ...formulario, tiposSite: alternarNaLista(formulario.tiposSite, t.valor) })
-                      }
-                    />
-                    {t.rotulo}
-                  </label>
+                  <CaixaSelecao
+                    key={t.valor}
+                    rotulo={t.rotulo}
+                    checked={formulario.tiposSite.includes(t.valor)}
+                    onChange={() =>
+                      setFormulario({ ...formulario, tiposSite: alternarNaLista(formulario.tiposSite, t.valor) })
+                    }
+                  />
                 ))}
-              </div>
+              </GrupoCaixasSelecao>
               {formulario.tiposSite.length === 0 && (
                 <p className="mt-1 text-xs text-danger">Escolha pelo menos um serviço.</p>
               )}
@@ -141,20 +140,18 @@ export function GestorClientes({ clientesIniciais }: { clientesIniciais: Perfil[
               <legend className="mb-1.5 text-sm font-medium text-ink">
                 Departamento <span className="font-normal text-ink-300">(organização interna, opcional)</span>
               </legend>
-              <div className="flex flex-wrap gap-3">
+              <GrupoCaixasSelecao>
                 {DEPARTAMENTOS_CLIENTE.map((d) => (
-                  <label key={d.valor} className="flex items-center gap-1.5 text-sm text-ink-400">
-                    <input
-                      type="checkbox"
-                      checked={formulario.departamentos.includes(d.valor)}
-                      onChange={() =>
-                        setFormulario({ ...formulario, departamentos: alternarNaLista(formulario.departamentos, d.valor) })
-                      }
-                    />
-                    {d.rotulo}
-                  </label>
+                  <CaixaSelecao
+                    key={d.valor}
+                    rotulo={d.rotulo}
+                    checked={formulario.departamentos.includes(d.valor)}
+                    onChange={() =>
+                      setFormulario({ ...formulario, departamentos: alternarNaLista(formulario.departamentos, d.valor) })
+                    }
+                  />
                 ))}
-              </div>
+              </GrupoCaixasSelecao>
             </fieldset>
 
             {erro && <p className="text-sm text-danger">{erro}</p>}
@@ -300,74 +297,34 @@ function CartaoCliente({
   }
 
   return (
-    <Cartao className="animate-entrada p-3" style={{ animationDelay: `${atraso}ms` }}>
-      <div className="flex items-center gap-3">
-        {cliente.logo_url ? (
-          // eslint-disable-next-line @next/next/no-img-element -- URL dinâmico do Supabase Storage
-          <img
-            src={cliente.logo_url}
-            alt={cliente.company_name ?? "Logótipo"}
-            className="h-10 w-10 shrink-0 rounded-lg border border-ink-100 bg-white object-contain"
-          />
-        ) : (
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-ink-50 text-xs text-ink-300">
-            sem logo
-          </div>
-        )}
-
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-ink">{cliente.full_name}</p>
-          <p className="truncate text-xs text-ink-400">{cliente.company_name}</p>
-
-          {/* Serviço = o(s) que o cliente TEM contratado com a Vértice (site
-              institucional, loja online, aplicação web…) — vem de
-              site_type, nunca fica vazio. Pode ter mais do que um, todos
-              aparecem lado a lado. Não confundir com "Departamento"
-              abaixo, que é só organização interna do admin. */}
-          {!aEditarServicos && (
-            <div className="mt-1 flex flex-wrap items-center gap-1">
-              <span className="text-xs text-ink-300">Serviço:</span>
-              {cliente.site_type.map((t) => (
-                <Distintivo key={t} value={t} />
-              ))}
-              <button
-                type="button"
-                onClick={abrirEdicaoServicos}
-                className="text-xs text-accent-hover underline-offset-2 hover:underline"
-              >
-                Editar
-              </button>
+    <Cartao
+      interativo
+      selecionado={aEditarServicos || aEditarDepartamentos}
+      className="animate-entrada p-3"
+      style={{ animationDelay: `${atraso}ms` }}
+    >
+      {/*
+        Layout inspirado num cartão de identificação: foto à esquerda,
+        identidade (nome/empresa) + ação principal no topo à direita, e por
+        baixo uma "ficha" de campos lado a lado (Serviço | Departamento) —
+        nunca um empilhado a crescer para baixo a cada novo dado.
+      */}
+      <div className="flex items-start gap-4">
+        {/* Logo e a ação de a trocar, agrupados — o botão fica mesmo por
+            baixo da imagem que altera, como a foto de um cartão. */}
+        <div className="flex shrink-0 flex-col items-center gap-1.5">
+          {cliente.logo_url ? (
+            // eslint-disable-next-line @next/next/no-img-element -- URL dinâmico do Supabase Storage
+            <img
+              src={cliente.logo_url}
+              alt={cliente.company_name ?? "Logótipo"}
+              className="h-12 w-12 rounded-lg border border-ink-100 bg-white object-contain"
+            />
+          ) : (
+            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-ink-50 text-[10px] text-ink-300">
+              sem logo
             </div>
           )}
-
-          {!aEditarDepartamentos && (
-            <div className="mt-1 flex flex-wrap items-center gap-1">
-              <span className="text-xs text-ink-300">Departamento (interno):</span>
-              {cliente.department.length > 0 ? (
-                cliente.department.map((d) => <Distintivo key={d} value={d} />)
-              ) : (
-                <span className="text-xs text-ink-300">nenhum</span>
-              )}
-              <button
-                type="button"
-                onClick={abrirEdicaoDepartamentos}
-                className="text-xs text-accent-hover underline-offset-2 hover:underline"
-              >
-                Editar
-              </button>
-            </div>
-          )}
-          {cliente.must_change_password && (
-            <p className="mt-1 text-[11px] text-warning">Aguarda 1º acesso</p>
-          )}
-        </div>
-
-        <div className="flex shrink-0 items-center gap-2">
-          <Link href={`/admin/clients/${cliente.id}/history`}>
-            <Botao type="button" variant="ghost" size="sm">
-              Ver histórico
-            </Botao>
-          </Link>
           <input
             ref={inputFicheiroRef}
             type="file"
@@ -377,13 +334,89 @@ function CartaoCliente({
           />
           <Botao
             type="button"
-            variant="secondary"
+            variant="ghost"
             size="sm"
             isLoading={aCarregarLogo}
             onClick={() => inputFicheiroRef.current?.click()}
+            className="px-2 py-1 text-[11px]"
           >
-            {cliente.logo_url ? "Trocar logo" : "Carregar logo"}
+            {cliente.logo_url ? "Trocar" : "Carregar"}
           </Botao>
+        </div>
+
+        <div className="min-w-0 flex-1">
+          {/* items-baseline (não items-start): o botão tem padding próprio
+              (py-1.5) — a olho, ficava mais baixo do que o nome. Alinhando
+              pela baseline do texto, "Ver histórico" fica à mesma altura
+              da primeira linha (o nome), seja qual for o que vem a seguir. */}
+          <div className="flex items-baseline justify-between gap-2">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-ink">{cliente.full_name}</p>
+              <p className="truncate text-xs text-ink-400">{cliente.company_name}</p>
+              {cliente.must_change_password && (
+                <p className="mt-0.5 text-[11px] text-warning">Aguarda 1º acesso</p>
+              )}
+            </div>
+            <Link href={`/admin/clients/${cliente.id}/history`} className="shrink-0">
+              <Botao type="button" variant="ghost" size="sm">
+                Ver histórico
+              </Botao>
+            </Link>
+          </div>
+
+          {/* Serviço = o(s) que o cliente TEM contratado com a Vértice (site
+              institucional, loja online, aplicação web…) — vem de
+              site_type, nunca fica vazio. Pode ter mais do que um, todos
+              aparecem lado a lado. Não confundir com "Departamento" ao
+              lado, que é só organização interna do admin. Lado a lado
+              (grid de 2 colunas), como os campos de uma ficha — não um por
+              baixo do outro. */}
+          <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-ink-100 pt-2.5">
+            {!aEditarServicos && (
+              <div className="min-w-0">
+                <div className="flex items-center justify-between gap-1">
+                  {/* pl-2.5 = o padding esquerdo do Distintivo (px-2.5) por
+                      baixo — sem isto a primeira letra do rótulo ficava à
+                      frente da primeira letra do valor, dentro do balão. */}
+                  <span className="pl-2.5 text-[10px] font-semibold uppercase tracking-wider text-ink-300">Serviço</span>
+                  <button
+                    type="button"
+                    onClick={abrirEdicaoServicos}
+                    className="text-[10px] text-accent-hover underline-offset-2 hover:underline"
+                  >
+                    Editar
+                  </button>
+                </div>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {cliente.site_type.map((t) => (
+                    <Distintivo key={t} value={t} />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {!aEditarDepartamentos && (
+              <div className="min-w-0">
+                <div className="flex items-center justify-between gap-1">
+                  <span className="pl-2.5 text-[10px] font-semibold uppercase tracking-wider text-ink-300">Departamento</span>
+                  <button
+                    type="button"
+                    onClick={abrirEdicaoDepartamentos}
+                    className="text-[10px] text-accent-hover underline-offset-2 hover:underline"
+                  >
+                    Editar
+                  </button>
+                </div>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {cliente.department.length > 0 ? (
+                    cliente.department.map((d) => <Distintivo key={d} value={d} />)
+                  ) : (
+                    <span className="pl-2.5 text-xs text-ink-300">nenhum</span>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
       {erroLogo && <p className="mt-2 text-xs text-danger">{erroLogo}</p>}
@@ -391,18 +424,16 @@ function CartaoCliente({
       {aEditarServicos && (
         <div className="mt-3 space-y-2 border-t border-ink-100 pt-3">
           <p className="text-xs font-medium text-ink-400">Serviço(s)</p>
-          <div className="flex flex-wrap gap-3">
+          <GrupoCaixasSelecao>
             {TIPOS_SITE.map((t) => (
-              <label key={t.valor} className="flex items-center gap-1.5 text-sm text-ink-400">
-                <input
-                  type="checkbox"
-                  checked={servicosEditados.includes(t.valor)}
-                  onChange={() => setServicosEditados(alternarNaLista(servicosEditados, t.valor))}
-                />
-                {t.rotulo}
-              </label>
+              <CaixaSelecao
+                key={t.valor}
+                rotulo={t.rotulo}
+                checked={servicosEditados.includes(t.valor)}
+                onChange={() => setServicosEditados(alternarNaLista(servicosEditados, t.valor))}
+              />
             ))}
-          </div>
+          </GrupoCaixasSelecao>
           {erroServicos && <p className="text-xs text-danger">{erroServicos}</p>}
           <div className="flex gap-2">
             <Botao type="button" size="sm" isLoading={aGuardarServicos} onClick={guardarServicos}>
@@ -424,18 +455,16 @@ function CartaoCliente({
       {aEditarDepartamentos && (
         <div className="mt-3 space-y-2 border-t border-ink-100 pt-3">
           <p className="text-xs font-medium text-ink-400">Departamento (organização interna, opcional)</p>
-          <div className="flex flex-wrap gap-3">
+          <GrupoCaixasSelecao>
             {DEPARTAMENTOS_CLIENTE.map((d) => (
-              <label key={d.valor} className="flex items-center gap-1.5 text-sm text-ink-400">
-                <input
-                  type="checkbox"
-                  checked={departamentosEditados.includes(d.valor)}
-                  onChange={() => setDepartamentosEditados(alternarNaLista(departamentosEditados, d.valor))}
-                />
-                {d.rotulo}
-              </label>
+              <CaixaSelecao
+                key={d.valor}
+                rotulo={d.rotulo}
+                checked={departamentosEditados.includes(d.valor)}
+                onChange={() => setDepartamentosEditados(alternarNaLista(departamentosEditados, d.valor))}
+              />
             ))}
-          </div>
+          </GrupoCaixasSelecao>
           {erroDepartamentos && <p className="text-xs text-danger">{erroDepartamentos}</p>}
           <div className="flex gap-2">
             <Botao type="button" size="sm" isLoading={aGuardarDepartamentos} onClick={guardarDepartamentos}>

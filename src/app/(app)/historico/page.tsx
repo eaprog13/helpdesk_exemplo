@@ -40,7 +40,8 @@ export default async function PaginaHistoricoCliente() {
         {conversas.map((conversa, i) => (
           <Link key={conversa.id} href={`/historico/${conversa.id}`} className="block">
             <Cartao
-              className="animate-entrada flex items-center justify-between gap-3 p-4 transition-[box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-md"
+              interativo
+              className="animate-entrada flex items-center justify-between gap-3 p-4"
               style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}
             >
               <span className="text-sm font-medium text-ink">{formatarTituloConversa(conversa.created_at)}</span>

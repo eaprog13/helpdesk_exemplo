@@ -4,12 +4,12 @@ import type { RemetenteEmail, ResultadoEnvio } from "@/core/ports/notifications"
 import type { Ticket } from "@/core/types";
 
 function envolverHtml(titulo: string, corpoHtml: string) {
-  // Cores de marca da Vértice aplicadas também nos emails transacionais.
+  // Cores de marca da Vértice Digital aplicadas também nos emails transacionais.
   return `
   <div style="font-family: Arial, sans-serif; background:#F4F6F8; padding:32px;">
     <div style="max-width:520px;margin:0 auto;background:#FFFFFF;border-radius:12px;overflow:hidden;border:1px solid #E8ECF0;">
       <div style="background:#09182A;padding:20px 24px;">
-        <span style="color:#FFFFFF;font-size:16px;font-weight:600;">Vértice · Apoio ao Cliente</span>
+        <span style="color:#FFFFFF;font-size:16px;font-weight:600;">Vértice Digital · Apoio ao Cliente</span>
       </div>
       <div style="padding:24px;color:#09182A;font-size:14px;line-height:1.6;">
         <h2 style="margin-top:0;color:#09182A;">${titulo}</h2>
@@ -67,13 +67,13 @@ export class RemetenteEmailResend implements RemetenteEmail {
     const html = envolverHtml(
       "As suas credenciais de acesso",
       `<p>Olá ${nomeCompleto},</p>
-       <p>Foi criada uma conta para si no centro de apoio ao cliente da Vértice.</p>
+       <p>Foi criada uma conta para si no centro de apoio ao cliente da Vértice Digital.</p>
        <p><strong>Email:</strong> ${destinatario}<br/>
           <strong>Password temporária:</strong> ${palavraPasseTemporaria}</p>
        <p>Por segurança, ser-lhe-á pedido para definir uma nova password no primeiro acesso.</p>
        <p><a href="${this.urlApp}/login" style="color:#0F6E8C;">Aceder ao centro de apoio</a></p>`
     );
-    return this.enviar(destinatario, "As suas credenciais de acesso — Apoio ao Cliente Vértice", html);
+    return this.enviar(destinatario, "As suas credenciais de acesso — Apoio ao Cliente Vértice Digital", html);
   }
 
   async enviarTicketCriado(destinatario: string, nomeCompleto: string, ticket: Ticket): Promise<ResultadoEnvio> {

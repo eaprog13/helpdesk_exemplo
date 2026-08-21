@@ -154,7 +154,7 @@ function CartaoSugestaoVirável({
         )}
       >
         {/* Frente */}
-        <Cartao className="absolute inset-0 flex flex-col p-4 [backface-visibility:hidden] hover:shadow-md">
+        <Cartao interativo className="absolute inset-0 flex flex-col p-4 [backface-visibility:hidden]">
           <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent-light text-accent-hover">
             <Icone className="h-5 w-5" />
           </span>
@@ -164,7 +164,10 @@ function CartaoSugestaoVirável({
         </Cartao>
 
         {/* Verso */}
-        <Cartao className="absolute inset-0 flex flex-col overflow-y-auto scrollbar-thin p-4 [backface-visibility:hidden] [transform:rotateY(180deg)]">
+        <Cartao
+          interativo
+          className="absolute inset-0 flex flex-col overflow-y-auto scrollbar-thin p-4 [backface-visibility:hidden] [transform:rotateY(180deg)]"
+        >
           <p className="text-xs font-semibold text-ink">{titulo}</p>
           <ol className="mt-2 list-decimal space-y-1.5 pl-4 text-xs text-ink-400">
             {passos.map((passo) => (

@@ -2,7 +2,7 @@
 
 Aplicação interna de apoio ao cliente da **Vértice**, desenvolvida para clientes com **sites institucionais** e **lojas online**.
 
-O sistema disponibiliza uma experiência de suporte baseada em conversação, com histórico persistente, base de conhecimento interna e integração com diferentes fornecedores de **LLM**. Quando uma questão não pode ser resolvida automaticamente, é criado um ticket para a equipa de desenvolvimento.
+O sistema disponibiliza uma experiência de suporte baseada em conversação, com histórico persistente e base de conhecimento interna. A **LLM** (fornecedor à escolha) nunca responde por conhecimento próprio — só embeleza texto já correto (histórico, KB, saudação, aviso de ticket). Quando uma questão não tem resposta no histórico nem na base de conhecimento, é criado sempre um ticket para a equipa de desenvolvimento, em vez de arriscar uma resposta inventada.
 
 ---
 
@@ -13,12 +13,13 @@ O sistema disponibiliza uma experiência de suporte baseada em conversação, co
 * Histórico completo e persistente das conversas.
 * Pesquisa automática no histórico do próprio cliente.
 * Consulta da base de conhecimento interna.
-* Integração com múltiplos fornecedores de LLM:
+* Integração com múltiplos fornecedores de LLM (só para embelezar texto — ver abaixo):
 
-  * Gemini
+  * Gemini (Google AI Studio)
   * Anthropic Claude
   * OpenAI
-* Criação automática de tickets quando é necessária intervenção dos developers.
+  * GroqCloud
+* Criação automática de tickets sempre que o histórico e a base de conhecimento não têm resposta.
 * Gestão de clientes, developers e administradores.
 * Notificações por email através do Resend.
 * Notificações opcionais por WhatsApp através do Twilio.
@@ -29,31 +30,44 @@ O sistema disponibiliza uma experiência de suporte baseada em conversação, co
   * `admin`
 * Protecções de segurança ao nível da aplicação e da base de dados.
 
-O fluxo de resolução segue uma ordem definida, terminando assim que é encontrada uma resposta:
+O fluxo de resolução segue uma ordem definida, terminando assim que é encontrada uma resposta. A LLM nunca inventa factos específicos da Vértice (preços, prazos, procedimentos) fora do que está na base de conhecimento — nem por "embelezar" texto já correto, nem ao gerar uma resposta nova fundamentada nos excertos da KB:
 
 ```text
-Pergunta do cliente
+Mensagem do cliente
         │
         ▼
-Histórico do cliente
-        │
-   encontrou resposta?
+  É só conversa social? (saudação/agradecimento — regra fixa, sem LLM)
       /       \
     SIM       NÃO
     │          │
     ▼          ▼
- Resposta   Base de conhecimento
-                │
-           encontrou resposta?
-              /       \
-            SIM       NÃO
-            │          │
-            ▼          ▼
-         Resposta      LLM
-                         │
-                         ▼
-                    Criar ticket
+Resposta    Histórico do cliente
+simpática        │
+fixa,       encontrou resposta confiante?
+embelezada     /       \
+             SIM       NÃO
+             │          │
+             ▼          ▼
+          Resposta   Base de conhecimento tem 1 artigo confiante?
+        (histórico,        /       \
+         embelezada)     SIM       NÃO
+                          │          │
+                          ▼          ▼
+                       Resposta   Já tentou 3x seguidas nesta conversa?
+                      (KB, embe-      /       \
+                       lezada)      NÃO       SIM
+                                     │          │
+                                     ▼          ▼
+                        LLM tenta ajudar,   Mensagem fixa "encaminhado
+                        fundamentada nos     para a equipa" (embelezada)
+                        excertos da KB              │
+                        (mesmo fracos) —             ▼
+                        nunca inventa           Criar ticket
+                        (conta como 1
+                        tentativa)
 ```
+
+Uma resposta confiante de histórico/KB (ou uma nova pergunta depois de uma dessas) reinicia a contagem de tentativas — só conta como "seguida" uma sequência de respostas da LLM sem nenhuma resposta confiante pelo meio.
 
 ---
 
@@ -76,11 +90,12 @@ Histórico do cliente
 
 ### Inteligência Artificial
 
-* **Gemini** — fornecedor predefinido
+* **Gemini** (Google AI Studio) — fornecedor predefinido
 * **Anthropic Claude**
 * **OpenAI**
+* **GroqCloud**
 
-O fornecedor pode ser alterado através de uma variável de ambiente, sem necessidade de alterar a lógica de negócio.
+O fornecedor pode ser alterado através de uma variável de ambiente, sem necessidade de alterar a lógica de negócio. Em qualquer fornecedor, a LLM só é usada para **embelezar** texto já correto/aprovado (histórico, base de conhecimento, saudação, aviso de ticket) — nunca para responder por conhecimento próprio.
 
 ### Notificações
 
@@ -116,7 +131,7 @@ src/
 
   adapters/                ← implementações concretas dos ports de cima.
     supabase/                 Hoje: Supabase (Postgres + Auth).
-    llm/                      Hoje: Gemini / Anthropic / OpenAI.
+    llm/                      Hoje: Gemini / Anthropic / OpenAI / GroqCloud.
     notifications/            Hoje: Resend (email) / Twilio (WhatsApp).
 
   composition/
@@ -167,8 +182,9 @@ aberto ──(dev assume)──▶ em resolução ──(dev entrega resposta)�
                                                                     fechado
 ```
 
-- **Aberto** (`open`): criado pelo cliente (via chat → LLM sem resposta, ou
-  diretamente em "Abrir ticket") e atribuído ao departamento certo — ver
+- **Aberto** (`open`): criado pelo cliente (via chat → sem resposta no
+  histórico nem na base de conhecimento, ou diretamente em "Abrir ticket")
+  e atribuído ao departamento certo — ver
   `escolherDevPorMenorCarga` em [ticketService.ts](src/core/services/ticketService.ts).
   Sem devs validados nesse departamento, fica sem dev até um admin atribuir
   à mão.

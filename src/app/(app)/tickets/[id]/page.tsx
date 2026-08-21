@@ -38,6 +38,11 @@ export default async function PaginaDetalhePedidoCliente({ params }: { params: P
         <ListaAnexosTicket
           idTicket={ticket.id}
           anexosIniciais={anexos}
+          // Só pode anexar enquanto descreve o pedido (open) ou ao
+          // confirmar/devolver uma resposta (resolved) — enquanto está "em
+          // resolução" (aguarda resposta do dev) ou já "fechado", fica
+          // bloqueado (ver core/services/ticketService.ts, adicionarAnexoTicket).
+          podeAnexar={ticket.status === "open" || ticket.status === "resolved"}
           legenda={anexos.length === 0 ? "Ainda não anexou nenhum ficheiro a este pedido." : undefined}
         />
       </Cartao>
