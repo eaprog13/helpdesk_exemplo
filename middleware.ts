@@ -71,8 +71,16 @@ export async function middleware(pedido: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Aplicar a tudo exceto assets estáticos internos do Next.js.
+     * Aplicar a tudo exceto assets estáticos internos do Next.js e
+     * ficheiros estáticos (public/, ícones de metadata do App Router como
+     * src/app/icon.png, fontes, etc.) — sem isto, um pedido não autenticado
+     * a um destes ficheiros era redirecionado para /login (que devolve
+     * HTML, não a imagem), partindo o logótipo em todo o lado onde
+     * aparecia antes de autenticar (ex.: a própria página de login).
+     * Confirmado só em produção (`next start`) — em `next dev`/Turbopack
+     * os assets de public/ não passavam pelo middleware, por isso nunca
+     * se via o problema em desenvolvimento.
      */
-    "/((?!_next/static|_next/image|favicon.ico).*)",
+    "/((?!_next/static|_next/image|favicon\\.ico|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|css|js|map|txt|xml|woff2?|ttf)$).*)",
   ],
 };
