@@ -1,7 +1,13 @@
 import { Suspense } from "react";
+import { connection } from "next/server";
 import { FormularioRecuperarPassword } from "@/components/auth/ForgotPasswordForm";
 
-export default function PaginaRecuperarPassword() {
+export default async function PaginaRecuperarPassword() {
+  // Ver comentário equivalente em src/app/login/page.tsx: força renderização
+  // dinâmica para que o nonce do CSP (middleware.ts) chegue aos scripts
+  // desta página.
+  await connection();
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-surface px-4">
       <div className="w-full max-w-sm">

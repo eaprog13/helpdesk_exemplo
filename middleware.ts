@@ -14,12 +14,24 @@ function ehCaminhoPublico(caminho: string) {
 
 export async function middleware(pedido: NextRequest) {
   const nonce = crypto.randomUUID();
+  const cabecalhosSeguranca = construirCabecalhosSeguranca(nonce);
+
+  // Reencaminhar a CSP (com o nonce) também nos headers do PEDIDO, não só
+  // na resposta — é assim que o Next.js sabe que nonce aplicar aos scripts
+  // que ele próprio gera (framework, hydration, bundle de cada página). Sem
+  // isto, o CSP acima bloqueava os próprios scripts do Next.js (nenhum
+  // tinha o atributo nonce), a app ficava sem JS a correr e nada abaixo do
+  // HTML estático (ex.: o formulário de login) chegava a aparecer. Ver doc
+  // do Next.js: "Content Security Policy" > Nonces > "How nonces work".
+  const cabecalhosPedido = new Headers(pedido.headers);
+  cabecalhosPedido.set("x-nonce", nonce);
+  cabecalhosPedido.set("Content-Security-Policy", cabecalhosSeguranca["Content-Security-Policy"]);
+
   const resposta = NextResponse.next({
-    request: { headers: pedido.headers },
+    request: { headers: cabecalhosPedido },
   });
 
   // ── 1) Cabeçalhos de segurança em todas as respostas ──────────────────
-  const cabecalhosSeguranca = construirCabecalhosSeguranca(nonce);
   for (const [chave, valor] of Object.entries(cabecalhosSeguranca)) {
     resposta.headers.set(chave, valor);
   }

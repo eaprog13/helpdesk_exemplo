@@ -1,7 +1,15 @@
 import { Suspense } from "react";
+import { connection } from "next/server";
 import { FormularioLogin } from "@/components/auth/LoginForm";
 
-export default function PaginaLogin() {
+export default async function PaginaLogin() {
+  // Força renderização dinâmica (por pedido): o CSP em middleware.ts usa um
+  // nonce novo a cada pedido, e o Next só consegue aplicá-lo aos scripts que
+  // gera quando a página é renderizada dinamicamente — pré-gerada em build
+  // não tem pedido/nonce nenhum disponível, e os scripts ficavam bloqueados
+  // pelo próprio CSP (ver comentário em middleware.ts).
+  await connection();
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-surface px-4">
       <div className="w-full max-w-sm">
