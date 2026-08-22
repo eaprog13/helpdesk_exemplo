@@ -25,7 +25,13 @@ export function construirCabecalhosSeguranca(nonce: string) {
     "X-Frame-Options": "DENY",
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "strict-origin-when-cross-origin",
-    "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()",
+    // microphone=(self): o ditado por voz do chat (ver ChatInput.tsx, Web
+    // Speech API) precisa de acesso ao microfone no próprio site — com
+    // "()" (ninguém, nem self) o browser bloqueia o pedido antes de sequer
+    // chegar à permissão do site, dando sempre "not-allowed" mesmo com o
+    // microfone autorizado nas definições do browser. Câmara/geolocalização/
+    // pagamentos continuam bloqueados: nada na app os usa.
+    "Permissions-Policy": "camera=(), microphone=(self), geolocation=(), payment=()",
     "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload",
     "X-DNS-Prefetch-Control": "off",
     "Cross-Origin-Opener-Policy": "same-origin",
