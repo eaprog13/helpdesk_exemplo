@@ -4,6 +4,10 @@ import { construirCabecalhosSeguranca } from "@/lib/security/headers";
 
 const CAMINHOS_PUBLICOS = ["/login", "/forgot-password", "/api/auth"];
 
+// 30 minutos sem nenhum pedido — ver secção "Timeout de sessão por
+// inatividade" abaixo.
+const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
+
 function ehCaminhoPublico(caminho: string) {
   return (
     CAMINHOS_PUBLICOS.some((p) => caminho === p || caminho.startsWith(`${p}/`)) ||
@@ -57,8 +61,36 @@ export async function middleware(pedido: NextRequest) {
   );
 
   const {
-    data: { user: utilizador },
+    data: { user: utilizadorSupabase },
   } = await supabase.auth.getUser();
+  let utilizador = utilizadorSupabase;
+
+  // ── 2.1) Timeout de sessão por inatividade ────────────────────────────
+  // O Supabase, por si só, não desloga por inatividade — o refresh token
+  // renova-se sozinho enquanto o browser continuar a fazer pedidos, mesmo
+  // ao fim de dias. Guardamos a hora do último pedido autenticado num
+  // cookie próprio; se passar mais de INACTIVITY_TIMEOUT_MS sem nenhum
+  // pedido, força logout e exige novo login, mesmo que o token Supabase em
+  // si ainda fosse válido.
+  if (utilizador) {
+    const ultimaAtividade = Number(pedido.cookies.get("last_activity")?.value ?? 0);
+    const inativoDemasiadoTempo = ultimaAtividade > 0 && Date.now() - ultimaAtividade > INACTIVITY_TIMEOUT_MS;
+
+    if (inativoDemasiadoTempo) {
+      await supabase.auth.signOut();
+      utilizador = null;
+      resposta.cookies.delete("last_activity");
+    } else {
+      resposta.cookies.set({
+        name: "last_activity",
+        value: String(Date.now()),
+        path: "/",
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        maxAge: INACTIVITY_TIMEOUT_MS / 1000,
+      });
+    }
+  }
 
   const { pathname: caminho } = pedido.nextUrl;
 
