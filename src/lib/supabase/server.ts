@@ -1,11 +1,14 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { comSegurancaReforcada } from "@/lib/security/cookies";
 
 /**
  * Cliente Supabase para uso no servidor (Server Components, Route Handlers,
  * Server Actions). Lê/escreve a sessão a partir dos cookies HTTP-only geridos
  * pelo Supabase Auth — o JWT de sessão nunca fica acessível a JavaScript no
- * browser (mitiga roubo de token via XSS).
+ * browser (mitiga roubo de token via XSS; ver comSegurancaReforcada, que
+ * reforça isto explicitamente por cima do que o @supabase/ssr define por
+ * omissão, que NÃO é httpOnly).
  */
 export async function criarClienteServidor() {
   const armazemCookies = await cookies();
@@ -20,7 +23,7 @@ export async function criarClienteServidor() {
         },
         set(nome: string, valor: string, opcoes: CookieOptions) {
           try {
-            armazemCookies.set({ name: nome, value: valor, ...opcoes });
+            armazemCookies.set({ name: nome, value: valor, ...comSegurancaReforcada(opcoes) });
           } catch {
             // set() chamado a partir de um Server Component: ignorável,
             // o middleware trata da renovação de sessão nesse caso.
@@ -28,7 +31,7 @@ export async function criarClienteServidor() {
         },
         remove(nome: string, opcoes: CookieOptions) {
           try {
-            armazemCookies.set({ name: nome, value: "", ...opcoes });
+            armazemCookies.set({ name: nome, value: "", ...comSegurancaReforcada(opcoes) });
           } catch {
             // idem
           }

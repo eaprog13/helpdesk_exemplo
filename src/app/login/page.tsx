@@ -1,14 +1,19 @@
-import { Suspense } from "react";
 import { connection } from "next/server";
 import { FormularioLogin } from "@/components/auth/LoginForm";
 
-export default async function PaginaLogin() {
+export default async function PaginaLogin({
+  searchParams,
+}: {
+  searchParams: Promise<{ redirectTo?: string }>;
+}) {
   // Força renderização dinâmica (por pedido): o CSP em middleware.ts usa um
   // nonce novo a cada pedido, e o Next só consegue aplicá-lo aos scripts que
   // gera quando a página é renderizada dinamicamente — pré-gerada em build
   // não tem pedido/nonce nenhum disponível, e os scripts ficavam bloqueados
   // pelo próprio CSP (ver comentário em middleware.ts).
   await connection();
+
+  const { redirectTo } = await searchParams;
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-surface px-4">
@@ -22,9 +27,7 @@ export default async function PaginaLogin() {
           </p>
         </div>
 
-        <Suspense fallback={<div className="h-56" />}>
-          <FormularioLogin />
-        </Suspense>
+        <FormularioLogin redirectTo={redirectTo} />
       </div>
     </main>
   );

@@ -1,94 +1,39 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useActionState } from "react";
+import { useFormStatus } from "react-dom";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { criarClienteSupabase } from "@/lib/supabase/client";
+import { login, type ActionState } from "@/app/login/actions";
 import { Botao } from "@/components/ui/Button";
 import { Campo } from "@/components/ui/Input";
 import { CampoPassword } from "@/components/ui/PasswordInput";
 import { Cartao } from "@/components/ui/Card";
 
-/**
- * Só aceita caminhos internos relativos (ex.: "/tickets/123") como destino
- * de redirecionamento pós-login — nunca um URL absoluto ou "//host" (que o
- * browser trata como protocol-relative). "redirectTo" vem de um parâmetro de
- * query controlado pelo visitante do link, por isso tem de ser validado aqui
- * antes de navegar: sem isto, um link malicioso "/login?redirectTo=https://
- * site-falso.pt" levaria a vítima a autenticar-se no domínio real (por isso
- * de confiança) e a acabar redirecionada para um site de phishing (open
- * redirect, CWE-601).
- */
-function caminhoInternoSeguro(destino: string | null): string {
-  if (!destino || !destino.startsWith("/") || destino.startsWith("//")) {
-    return "/";
-  }
-  return destino;
+const initialState: ActionState = { status: "idle" };
+
+function BotaoSubmeter() {
+  const { pending } = useFormStatus();
+  return (
+    <Botao type="submit" isLoading={pending} className="w-full">
+      Entrar
+    </Botao>
+  );
 }
 
-export function FormularioLogin() {
-  const router = useRouter();
-  const parametrosPesquisa = useSearchParams();
-  const [email, setEmail] = useState("");
-  const [palavraPasse, setPalavraPasse] = useState("");
-  const [erro, setErro] = useState<string | null>(null);
-  const [aCarregar, setACarregar] = useState(false);
-
-  async function submeter(evento: FormEvent) {
-    evento.preventDefault();
-    setErro(null);
-    setACarregar(true);
-
-    const supabase = criarClienteSupabase();
-    const { error: erroLogin } = await supabase.auth.signInWithPassword({ email, password: palavraPasse });
-
-    if (erroLogin) {
-      // Detalhe completo só na consola (nunca no ecrã, para não revelar a
-      // utilizadores mal-intencionados se um email existe ou não) — mas é
-      // exatamente o que precisamos para diagnosticar durante o desenvolvimento.
-      console.error("[login] Supabase respondeu com erro:", erroLogin.status, erroLogin.message);
-
-      if (erroLogin.message?.toLowerCase().includes("email not confirmed")) {
-        setErro("O email ainda não está confirmado no Supabase (Authentication → Users → confirmar manualmente).");
-      } else {
-        setErro("Email ou password incorretos. Verifique as credenciais recebidas por email.");
-      }
-      setACarregar(false);
-      return;
-    }
-
-    // Cada login arranca com uma conversa em branco — as anteriores não se
-    // perdem, ficam acessíveis em "Histórico". Não bloqueia o login se
-    // falhar (ex.: hiccup de rede): a página de chat continua a funcionar,
-    // só reaproveita a conversa mais recente em vez de criar uma nova.
-    try {
-      await fetch("/api/chat/conversas", { method: "POST" });
-    } catch (erroConversa) {
-      console.error("[login] não foi possível iniciar nova conversa:", erroConversa);
-    }
-
-    const redirecionarPara = caminhoInternoSeguro(parametrosPesquisa.get("redirectTo"));
-    router.replace(redirecionarPara);
-    router.refresh();
-  }
+export function FormularioLogin({ redirectTo }: { redirectTo?: string }) {
+  const [state, formAction] = useActionState(login, initialState);
 
   return (
     <>
       <Cartao className="animate-entrada p-6">
-        <form onSubmit={submeter} className="space-y-4">
+        <form action={formAction} className="space-y-4">
+          {redirectTo ? <input type="hidden" name="redirectTo" value={redirectTo} /> : null}
+
           <div>
             <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-ink">
               Email
             </label>
-            <Campo
-              id="email"
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="nome@empresa.pt"
-            />
+            <Campo id="email" name="email" type="email" autoComplete="email" required placeholder="nome@empresa.pt" />
           </div>
           <div>
             <div className="mb-1.5 flex items-center justify-between">
@@ -101,23 +46,20 @@ export function FormularioLogin() {
             </div>
             <CampoPassword
               id="palavraPasse"
+              name="password"
               autoComplete="current-password"
               required
-              value={palavraPasse}
-              onChange={(e) => setPalavraPasse(e.target.value)}
               placeholder="••••••••"
             />
           </div>
 
-          {erro && (
+          {state.status === "error" ? (
             <p role="alert" className="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">
-              {erro}
+              {state.message}
             </p>
-          )}
+          ) : null}
 
-          <Botao type="submit" isLoading={aCarregar} className="w-full">
-            Entrar
-          </Botao>
+          <BotaoSubmeter />
         </form>
       </Cartao>
 
