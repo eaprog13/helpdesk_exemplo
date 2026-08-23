@@ -1,6 +1,7 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { construirCabecalhosSeguranca } from "@/lib/security/headers";
+import { comSegurancaReforcada } from "@/lib/security/cookies";
 
 const CAMINHOS_PUBLICOS = ["/login", "/forgot-password", "/api/auth"];
 
@@ -51,10 +52,10 @@ export async function middleware(pedido: NextRequest) {
           return pedido.cookies.get(nome)?.value;
         },
         set(nome: string, valor: string, opcoes: CookieOptions) {
-          resposta.cookies.set({ name: nome, value: valor, ...opcoes });
+          resposta.cookies.set({ name: nome, value: valor, ...comSegurancaReforcada(opcoes) });
         },
         remove(nome: string, opcoes: CookieOptions) {
-          resposta.cookies.set({ name: nome, value: "", ...opcoes });
+          resposta.cookies.set({ name: nome, value: "", ...comSegurancaReforcada(opcoes) });
         },
       },
     }
@@ -114,17 +115,28 @@ export async function middleware(pedido: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-     * Aplicar a tudo exceto assets estáticos internos do Next.js e
-     * ficheiros estáticos (public/, ícones de metadata do App Router como
-     * src/app/icon.png, fontes, etc.) — sem isto, um pedido não autenticado
-     * a um destes ficheiros era redirecionado para /login (que devolve
-     * HTML, não a imagem), partindo o logótipo em todo o lado onde
-     * aparecia antes de autenticar (ex.: a própria página de login).
-     * Confirmado só em produção (`next start`) — em `next dev`/Turbopack
-     * os assets de public/ não passavam pelo middleware, por isso nunca
-     * se via o problema em desenvolvimento.
-     */
-    "/((?!_next/static|_next/image|favicon\\.ico|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|css|js|map|txt|xml|woff2?|ttf)$).*)",
+    {
+      /*
+       * Aplicar a tudo exceto assets estáticos internos do Next.js e
+       * ficheiros estáticos (public/, ícones de metadata do App Router como
+       * src/app/icon.png, fontes, etc.) — sem isto, um pedido não autenticado
+       * a um destes ficheiros era redirecionado para /login (que devolve
+       * HTML, não a imagem), partindo o logótipo em todo o lado onde
+       * aparecia antes de autenticar (ex.: a própria página de login).
+       * Confirmado só em produção (`next start`) — em `next dev`/Turbopack
+       * os assets de public/ não passavam pelo middleware, por isso nunca
+       * se via o problema em desenvolvimento.
+       */
+      source:
+        "/((?!_next/static|_next/image|favicon\\.ico|icon|apple-icon|opengraph-image|twitter-image|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|css|js|map|txt|xml|woff2?|ttf)$).*)",
+      // Um prefetch (hover num <Link>, navegação especulativa) não precisa
+      // de renovar sessão nem escrever o cookie "last_activity" — só a
+      // navegação real que o utilizador de facto faz. Mesmo padrão usado em
+      // gestor_financeiro/gestor_investimento.
+      missing: [
+        { type: "header", key: "next-router-prefetch" },
+        { type: "header", key: "purpose", value: "prefetch" },
+      ],
+    },
   ],
 };
