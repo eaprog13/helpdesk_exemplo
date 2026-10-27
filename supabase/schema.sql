@@ -527,8 +527,13 @@ create trigger set_updated_at before update on public.tickets
 
 -- ── Trigger: criar perfil automaticamente ao criar um utilizador ──────
 -- O admin cria o utilizador via Supabase Admin API (auth.admin.createUser)
--- passando full_name/role/etc em user_metadata; este trigger copia esses
--- dados para public.profiles.
+-- passando full_name/company_name/phone em user_metadata e o role em
+-- app_metadata; este trigger copia esses dados para public.profiles.
+--
+-- O role vem SEMPRE de raw_app_meta_data: user_metadata é escrito por quem
+-- se regista (signUp com a chave anon, que é pública), por isso ler o role
+-- daí permitiria a qualquer pessoa criar uma conta já como 'admin'.
+-- app_metadata só a chave service_role o consegue escrever.
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
@@ -541,7 +546,7 @@ begin
   insert into public.profiles (id, role, full_name, company_name, phone)
   values (
     new.id,
-    coalesce(new.raw_user_meta_data ->> 'role', 'client'),
+    coalesce(new.raw_app_meta_data ->> 'role', 'client'),
     coalesce(new.raw_user_meta_data ->> 'full_name', new.email),
     new.raw_user_meta_data ->> 'company_name',
     new.raw_user_meta_data ->> 'phone'

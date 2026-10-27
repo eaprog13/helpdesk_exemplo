@@ -12,11 +12,15 @@ export class FornecedorGestaoIdentidadeSupabase implements FornecedorGestaoIdent
   constructor(private readonly authAdmin: SupabaseClient["auth"]["admin"]) {}
 
   async criarUtilizador(dados: DadosCriacaoUtilizador): Promise<{ id: string }> {
+    // O role vai em app_metadata (só a service_role o escreve), nunca em
+    // user_metadata — ver handle_new_user em supabase/schema.sql.
+    const { role, ...perfil } = dados.metadados;
     const { data, error } = await this.authAdmin.createUser({
       email: dados.email,
       password: dados.palavraPasse,
       email_confirm: true,
-      user_metadata: dados.metadados,
+      app_metadata: { role },
+      user_metadata: perfil,
     });
     if (error || !data.user) {
       throw new Error(error?.message ?? "Não foi possível criar o utilizador.");

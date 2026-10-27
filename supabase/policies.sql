@@ -45,6 +45,14 @@ create policy "profiles: admin gere perfis"
   using (public.current_role_is(array['admin']))
   with check (public.current_role_is(array['admin']));
 
+-- A policy de cima limita a LINHA (só o próprio perfil), não as COLUNAS:
+-- sem isto, um cliente autenticado podia mudar o próprio role para
+-- 'admin' pela API REST do Supabase. Pela chave anon/authenticated só se
+-- altera o nome e o telefone; role, department, site_type, etc. só pela
+-- service_role (que é o que a app usa no servidor).
+revoke update on public.profiles from anon, authenticated;
+grant update (full_name, phone) on public.profiles to authenticated;
+
 -- ── knowledge_base ─────────────────────────────────────────────────────
 create policy "kb: qualquer autenticado lê conteúdo publicado"
   on public.knowledge_base for select

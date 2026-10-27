@@ -18,10 +18,10 @@
 -- Requer supabase/migration_adicionar_departamentos.sql já aplicada
 -- (as colunas department não existem antes disso).
 
--- Manel — admin, sem departamento de dev associado (é quem gere a equipa).
+-- Admin — sem departamento de dev associado (é quem gere a equipa).
 update public.profiles set
   role = 'admin',
-  full_name = 'Emanuel Santos Aleluia',
+  full_name = 'Nome do Admin',
   department = '{}'
 where id = '<uuid-admin>';
 

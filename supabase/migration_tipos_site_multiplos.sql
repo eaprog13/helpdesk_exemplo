@@ -141,7 +141,8 @@ begin
   insert into public.profiles (id, role, full_name, company_name, phone)
   values (
     new.id,
-    coalesce(new.raw_user_meta_data ->> 'role', 'client'),
+    -- role só de app_metadata — ver supabase/migration_proteger_role.sql
+    coalesce(new.raw_app_meta_data ->> 'role', 'client'),
     coalesce(new.raw_user_meta_data ->> 'full_name', new.email),
     new.raw_user_meta_data ->> 'company_name',
     new.raw_user_meta_data ->> 'phone'

@@ -2,6 +2,10 @@
 
 Aplicação interna de apoio ao cliente da **Vértice**, desenvolvida para clientes com **sites institucionais** e **lojas online**.
 
+> **Projeto de portefólio.** A "Vértice Digital", a equipa, os contactos e
+> os clientes que aparecem nos dados de exemplo (`supabase/seed*.sql`) são
+> fictícios.
+
 O sistema disponibiliza uma experiência de suporte baseada em conversação, com histórico persistente e base de conhecimento interna. A **LLM** (fornecedor à escolha) nunca responde por conhecimento próprio — só embeleza texto já correto (histórico, KB, saudação, aviso de ticket). Quando uma questão não tem resposta no histórico nem na base de conhecimento, é criado sempre um ticket para a equipa de desenvolvimento, em vez de arriscar uma resposta inventada.
 
 ---
@@ -75,8 +79,8 @@ Uma resposta confiante de histórico/KB (ou uma nova pergunta depois de uma dess
 
 ### Aplicação
 
-* **Next.js 14**
-* **React**
+* **Next.js 16**
+* **React 18**
 * **TypeScript**
 * **Tailwind CSS**
 * **App Router**
@@ -233,6 +237,7 @@ Next.js é usado nos mesmos pontos:
 | Autenticação por JWT | Sessão Supabase Auth, verificada no servidor a cada pedido | [src/lib/auth/session.ts](src/lib/auth/session.ts) |
 | Autorização por papel (client/dev/admin) | `requireRole()` nas rotas sensíveis + regras em `core/services` | [src/lib/auth/session.ts](src/lib/auth/session.ts), [src/core/services/ticketService.ts](src/core/services/ticketService.ts) |
 | Row Level Security (defesa em profundidade a nível da BD) | Todas as tabelas | [supabase/policies.sql](supabase/policies.sql) |
+| Ninguém escolhe nem muda o próprio papel | `role` só vem de `app_metadata` (escrito pela service_role) e a chave pública não altera essa coluna | [supabase/schema.sql](supabase/schema.sql) (`handle_new_user`), [supabase/policies.sql](supabase/policies.sql) |
 | Rate limiting | `/api/chat`, `/api/tickets`, criação de clientes | [src/lib/security/rateLimit.ts](src/lib/security/rateLimit.ts) (Upstash, opcional) |
 | Validação de input | Todas as rotas de API | `zod` |
 | Segredos nunca expostos ao browser | Chaves de BD/LLM/Resend/Twilio | `import "server-only"` em todos os adaptadores e serviços do servidor |
@@ -252,87 +257,70 @@ projeto Supabase.
 
 ## Configuração
 
+### Requisitos
+
+* Node.js 20.9 ou superior (exigido pelo Next.js 16).
+* Um projeto [Supabase](https://supabase.com) (o plano grátis chega).
+* Uma chave de API do fornecedor de LLM escolhido (Gemini, Anthropic, OpenAI ou GroqCloud).
+* Opcional: [Resend](https://resend.com) para enviar emails, [Twilio](https://www.twilio.com/whatsapp) para WhatsApp e [Upstash](https://upstash.com) para o rate limiting (recomendado em produção).
+
 ### 1. Supabase
 
 1. Criar um projeto em [supabase.com](https://supabase.com).
-2. No **SQL Editor**, correr por ordem: `supabase/schema.sql`,
-   `supabase/policies.sql` e, opcionalmente, `supabase/seed.sql`.
-3. Em **Project Settings → API**, copiar `URL`, `anon public key` e
+2. No **SQL Editor**, correr por esta ordem:
+
+   | # | Ficheiro | O que faz |
+   |---|---|---|
+   | 1 | `supabase/schema.sql` | Tabelas, índices, funções de pesquisa, buckets de Storage (`logos`, `ticket-attachments`) e o trigger que cria o perfil ao criar um utilizador |
+   | 2 | `supabase/policies.sql` | Row Level Security |
+   | 3 | `supabase/migration_correcoes_advisor_seguranca.sql` | Endurecimento pedido pelo Security Advisor do Supabase (`search_path` fixo, permissões das funções) |
+   | 4 | `supabase/migration_correcoes_advisor_seguranca_parte2.sql` | Idem, segunda parte |
+   | 5 | `supabase/seed.sql` | *(opcional)* Artigos de exemplo da Base de Conhecimento |
+   | 6 | `supabase/seed_knowledge_base_institucional.sql` | *(opcional)* Factos da empresa (serviços, preços, contactos) |
+   | 7 | `supabase/seed_knowledge_base_paginas_internas.sql` | *(opcional)* Complementa o anterior — correr depois dele |
+   | 8 | `supabase/seed_knowledge_base_operacional.sql` | *(opcional)* Dia a dia do cliente (pagamentos, acessos, site em baixo…) |
+
+   Todos são idempotentes — podem voltar a correr-se sem duplicar nada.
+3. Em **Authentication → Sign In / Providers**, desligar **"Allow new users
+   to sign up"**: as contas são criadas só pelos admins (pela app ou pelo
+   painel).
+4. Em **Authentication → URL Configuration**, definir o **Site URL** (ex.:
+   `http://localhost:3000`) e acrescentar `<endereço da app>/api/auth/callback`
+   aos **Redirect URLs** — é para onde volta o link de "recuperar password".
+5. Em **Project Settings → API**, copiar `URL`, `anon public key` e
    `service_role key` para o `.env.local` (ver secção seguinte).
-4. Criar o primeiro utilizador **admin** manualmente: em
-   **Authentication → Users → Add user**, criar a conta e depois, no SQL
-   Editor, correr:
+6. Criar o primeiro **admin**: em **Authentication → Users → Add user**,
+   criar a conta (com **"Auto Confirm User"** marcado) e depois, no SQL
+   Editor:
    ```sql
    update public.profiles set role = 'admin', full_name = 'O seu nome'
    where id = '<uuid do utilizador criado>';
    ```
-   A partir daqui, esse admin já pode criar os restantes clientes pela
-   interface em `/admin/clients`; para devs, criar o utilizador da mesma
-   forma manual e definir `role = 'dev'` **e** `department` (`'desenvolvimento'`,
-   `'marketing'`, `'design'` ou `'geral'` — sem departamento, esse dev nunca
-   é candidato à atribuição automática de tickets, ver
-   [supabase/migration_adicionar_departamentos.sql](supabase/migration_adicionar_departamentos.sql)):
-   ```sql
-   update public.profiles set role = 'dev', department = 'desenvolvimento', full_name = 'Nome do dev'
-   where id = '<uuid do utilizador criado>';
-   ```
+   A partir daqui tudo se faz pela interface: clientes em `/admin/clients`
+   e equipa (devs/admins, com departamento) em `/admin/team`. Cada conta
+   nova recebe por email uma password temporária, que tem de ser mudada no
+   primeiro acesso. Um dev sem departamento nunca é candidato à atribuição
+   automática de tickets.
 
-> **Se já tinha corrido `schema.sql` antes** desta versão (que acrescentou a
-> pesquisa no histórico do cliente), o `create table if not exists` não
-> atualiza tabelas já existentes — correr também isto uma vez no SQL Editor:
-> ```sql
-> alter table public.messages drop constraint if exists messages_source_check;
-> alter table public.messages
->   add constraint messages_source_check check (source in ('history', 'knowledge_base', 'llm', 'ticket_ack'));
-> ```
-> (`schema.sql` continua seguro de correr do zero num projeto novo.)
-
-> **Se já tinha corrido `schema.sql`/o seed antes de 2026-08-19**, correr
-> também [`supabase/migration_flexibilidade_pesquisa.sql`](supabase/migration_flexibilidade_pesquisa.sql)
-> uma vez no SQL Editor: torna a pesquisa (histórico e base de conhecimento)
-> tolerante a perguntas com mais palavras — antes, `plainto_tsquery` exigia
-> que TODAS as palavras da pergunta aparecessem no documento, pelo que
-> perguntas mais longas/naturais (ex.: "prazo de entrega de projeto")
-> podiam falhar onde a versão curta ("projeto entrega") resultava — e
-> remove 11 entradas duplicadas da Base de Conhecimento deixadas por um
-> seed corrido duas vezes. (`schema.sql`/`seed_knowledge_base_institucional.sql`
-> já incluem a correção para instalações novas.)
-
-> **Se já tinha corrido `migration_flexibilidade_pesquisa.sql`**, correr
-> também [`supabase/migration_corrigir_double_stemming.sql`](supabase/migration_corrigir_double_stemming.sql):
-> aquela migração convertia o AND de `plainto_tsquery` em OR manipulando o
-> *texto* do tsquery já processado — mas `to_tsquery` volta a aplicar o
-> dicionário 'portuguese' a esse texto, o que "re-stemma" lexemas já
-> stemmed (ex.: "problema" → `problem` → `probl` na 2ª passagem), fazendo
-> certas palavras (comprovado: "problema") não devolverem nenhum resultado
-> mesmo estando literalmente no título de vários artigos. A correção
-> stemma cada palavra uma única vez e combina os resultados como valores
-> `tsquery`, nunca como texto. (`schema.sql` já inclui a correção.)
-
-> **Se já tinha corrido `schema.sql` antes de 2026-08-20**, correr também
-> [`supabase/migration_adicionar_departamentos.sql`](supabase/migration_adicionar_departamentos.sql):
-> acrescenta a coluna `department` a `profiles`/`knowledge_base`/`tickets`
-> (base da prioridade Crítica/Alta/Média/Baixa e da atribuição automática
-> de tickets por departamento + carga de trabalho) e classifica os
-> artigos da KB que já existirem. Sem isto, todos os devs/artigos/tickets
-> ficam sem
-> departamento e nenhum ticket é atribuído automaticamente — cai sempre
-> em "Por atribuir". (`schema.sql` e os dois `seed_knowledge_base_*.sql` já
-> incluem isto para instalações novas.)
-
-> **Se já tinha corrido `schema.sql` antes de 2026-08-20**, correr também
-> [`supabase/migration_tipos_site_multiplos.sql`](supabase/migration_tipos_site_multiplos.sql):
-> `site_type` (em `profiles` e `knowledge_base`) passa de valor único
-> (`institutional`/`ecommerce`/`both`) para array de valores
-> (`institutional`/`ecommerce`/`web_app`/`mobile_app`/`other`) — um cliente
-> pode ter mais do que um tipo de produto (ex.: site institucional E loja
-> online), mostrados lado a lado em `/admin/clients` em vez de um valor
-> genérico "Ambos". A migração converte os dados existentes automaticamente
-> (`both` → `{institutional, ecommerce}` num cliente, `{}` — "genérico,
-> aplica-se a todos" — num artigo da KB), mas vale a pena rever os clientes
-> convertidos na tabela que a própria migração devolve no fim. (`schema.sql`
-> e os `seed_knowledge_base_*.sql`/`seed.sql` já incluem isto para
-> instalações novas.)
+> **Base de dados criada com uma versão anterior?** Os ficheiros
+> `supabase/migration_*.sql` atualizam-na sem perder dados (cada um explica
+> no topo o que muda). Uma instalação nova a partir de `schema.sql` não
+> precisa de nenhum deles, além dos dois do Security Advisor (passos 3 e 4).
+>
+> | Migração | Quando correr |
+> |---|---|
+> | `migration_proteger_role.sql` | **Sempre**, em qualquer base de dados criada antes desta correção: impede que um utilizador escolha ou mude o próprio papel |
+> | `migration_flexibilidade_pesquisa.sql` e depois `migration_corrigir_double_stemming.sql` | Pesquisa (histórico e KB) tolerante a perguntas longas |
+> | `migration_adicionar_departamentos.sql` | Departamentos, prioridade e atribuição automática de tickets |
+> | `migration_tipos_site_multiplos.sql` | `site_type` passa de valor único a lista |
+> | `migration_anexos_ticket.sql` | Anexos nos tickets |
+> | `migration_contador_reaberturas.sql` | Contador de reaberturas (dashboard) |
+> | `migration_historico_ignorar_ticket_ack.sql` | A pesquisa no histórico ignora os avisos de "ticket aberto" |
+> | `migration_ativar_rls.sql` | Garante RLS ligado em todas as tabelas |
+> | `migration_atualizar_kb_institucional.sql`, `migration_kb_titulos_operacionais.sql` | Atualizam artigos de seeds corridos antes destas versões |
+>
+> `supabase/provisionar_equipa.sql` é o antigo processo manual de criar a
+> equipa por SQL — hoje faz-se em `/admin/team`.
 
 ### 2. Variáveis de ambiente
 
@@ -340,35 +328,36 @@ projeto Supabase.
 cp .env.example .env.local
 ```
 
-Preencher as variáveis com as credenciais reais.
-
-O fornecedor de LLM é definido através de:
+Preencher as variáveis com as credenciais reais. Cada uma está explicada no
+`.env.example`; as obrigatórias são as do Supabase, `LLM_PROVIDER` e a chave
+desse fornecedor. O fornecedor de LLM é definido através de:
 
 ```env
-LLM_PROVIDER=gemini
+LLM_PROVIDER=gemini   # gemini | anthropic | openai | groq
 ```
 
-As restantes variáveis encontram-se documentadas no `.env.example`.
+Sem `RESEND_API_KEY` as contas criam-se na mesma e, em desenvolvimento, a
+password temporária aparece no terminal onde corre o `npm run dev` (para se
+poder testar o login de um cliente). Em produção não é impressa em lado
+nenhum — configurar o Resend antes de criar clientes.
 
 > **Importante:** nunca adicionar `.env.local` ao repositório Git.
 
----
-
-## Execução local
-
-Instalar as dependências:
+### 3. Execução local
 
 ```bash
 npm install
-```
-
-Iniciar o servidor de desenvolvimento:
-
-```bash
 npm run dev
 ```
 
-Abrir [http://localhost:3000](http://localhost:3000).
+Abrir [http://localhost:3000](http://localhost:3000) e entrar com o admin
+criado no passo 6. Outros comandos:
+
+```bash
+npm run lint        # ESLint
+npm run typecheck   # verificação de tipos (tsc)
+npm run build       # build de produção
+```
 
 ### 4. Deploy na Vercel
 
@@ -376,8 +365,9 @@ Abrir [http://localhost:3000](http://localhost:3000).
 2. Configurar as mesmas variáveis de ambiente do `.env.local` em
    **Project Settings → Environment Variables**.
 3. Atualizar `ALLOWED_ORIGINS` e `NEXT_PUBLIC_APP_URL` para o domínio real
-   de produção.
-4. Deploy.
+   de produção, e o **Site URL** / **Redirect URLs** do Supabase também.
+4. Deploy. As funções correm em Frankfurt (`fra1`, ver `vercel.json`),
+   perto da base de dados do Supabase na UE.
 
 ## Notas e próximos passos sugeridos
 
@@ -398,30 +388,14 @@ Abrir [http://localhost:3000](http://localhost:3000).
   para uma experiência mais próxima do ChatGPT token-a-token.
 - Popular `knowledge_base` com o conteúdo real dos procedimentos da Vértice
   é o que determina a qualidade das respostas automáticas e reduz o volume
-  de tickets abertos para os devs. Dois seeds prontos a correr no SQL
-  Editor: [`supabase/seed_knowledge_base_institucional.sql`](supabase/seed_knowledge_base_institucional.sql)
+  de tickets abertos para os devs. Seeds prontos a correr no SQL
+  Editor (ver "Configuração"): [`supabase/seed_knowledge_base_institucional.sql`](supabase/seed_knowledge_base_institucional.sql)
+  e [`supabase/seed_knowledge_base_paginas_internas.sql`](supabase/seed_knowledge_base_paginas_internas.sql)
   (factos do site institucional — serviços, preços de referência,
-  processo, equipa, portefólio, contactos, lido diretamente de
-  [vertice-digital.example](https://vertice-digital.example/))
+  processo, equipa, portefólio, contactos)
   e [`supabase/seed_knowledge_base_operacional.sql`](supabase/seed_knowledge_base_operacional.sql)
   (dia a dia do cliente já em produção: pagamentos, acessos, site em
   baixo, alterações, funcionalidades novas, atualizações, e como usar o
   próprio centro de apoio — recuperar password, acompanhar o estado de um
   ticket). Este segundo inclui algumas entradas `[REVER]` por publicar —
   rever e confirmar em `/admin/knowledge-base` antes de as ativar.
-
-> **Se já tinha corrido `seed_knowledge_base_institucional.sql` antes de
-> 2026-08-20**, correr também
-> [`supabase/migration_atualizar_kb_institucional.sql`](supabase/migration_atualizar_kb_institucional.sql)
-> uma vez no SQL Editor: o site institucional da Vértice Digital mudou
-> (email, telefone, morada, equipa, portefólio, preços agora públicos, e o
-> serviço de "Automação e IA" deixou de existir como página própria) e,
-> como o seed usa `on conflict (title) do nothing`, voltar a correr o
-> ficheiro sozinho não atualiza as linhas já inseridas com os factos
-> antigos — só esta migração o faz. (`seed_knowledge_base_institucional.sql`
-> já inclui os factos corrigidos para instalações novas.)
->
-> O código postal (1000-100) foi confirmado a partir do rodapé do site
-> (repetido de forma consistente em home/sobre/contactos) — a página de
-> Contactos, isolada, mostra 1000-130; se algum dia corrigirem essa
-> inconsistência no site, atualizar aqui também.

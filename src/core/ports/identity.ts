@@ -11,8 +11,9 @@ export interface DadosCriacaoUtilizador {
   palavraPasse: string;
   // Estas chaves (role, full_name, …) mantêm-se em inglês/snake_case por
   // corresponderem literalmente ao que o trigger SQL "handle_new_user"
-  // (supabase/schema.sql) lê de raw_user_meta_data — mudar aqui obrigaria a
-  // mudar também o SQL.
+  // (supabase/schema.sql) lê dos metadados do utilizador (role de
+  // raw_app_meta_data, o resto de raw_user_meta_data) — mudar aqui
+  // obrigaria a mudar também o SQL.
   metadados: {
     role: "client" | "dev" | "admin";
     full_name: string;
