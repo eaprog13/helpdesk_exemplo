@@ -39,7 +39,7 @@ export interface DadosCriacaoCliente {
  * Cria a conta do cliente com uma password temporária gerada aleatoriamente
  * e envia-a por email. É assim que "o cliente recebe o login" antes de
  * poder usar o chat — só depois de autenticar é que a caixa de pergunta
- * fica acessível (ver middleware/guard da camada web).
+ * fica acessível (ver proxy/guard da camada web).
  */
 export async function criarCliente(dependencias: Dependencias, dados: DadosCriacaoCliente) {
   const palavraPasseTemporaria = gerarPalavraPasseTemporaria();

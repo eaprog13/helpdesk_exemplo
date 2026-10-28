@@ -1,6 +1,6 @@
 /**
  * Cabeçalhos de segurança equivalentes ao "helmet" do Express, aplicados
- * via middleware.ts a todas as respostas (Next.js/Vercel corre em ambiente
+ * via proxy.ts a todas as respostas (Next.js/Vercel corre em ambiente
  * serverless/edge, onde o middleware do Express não se aplica — isto é o
  * mecanismo nativo recomendado para o mesmo efeito).
  */

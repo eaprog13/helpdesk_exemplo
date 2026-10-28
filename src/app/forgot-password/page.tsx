@@ -4,7 +4,7 @@ import { FormularioRecuperarPassword } from "@/components/auth/ForgotPasswordFor
 
 export default async function PaginaRecuperarPassword() {
   // Ver comentário equivalente em src/app/login/page.tsx: força renderização
-  // dinâmica para que o nonce do CSP (middleware.ts) chegue aos scripts
+  // dinâmica para que o nonce do CSP (proxy.ts) chegue aos scripts
   // desta página.
   await connection();
 

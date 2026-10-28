@@ -232,7 +232,7 @@ Next.js é usado nos mesmos pontos:
 
 | Proteção | Onde | Ficheiro |
 |---|---|---|
-| Cabeçalhos tipo *helmet* (CSP, HSTS, X-Frame-Options, etc.) | Middleware, em todas as respostas | [middleware.ts](middleware.ts), [src/lib/security/headers.ts](src/lib/security/headers.ts) |
+| Cabeçalhos tipo *helmet* (CSP, HSTS, X-Frame-Options, etc.) | Proxy do Next.js, em todas as respostas | [src/proxy.ts](src/proxy.ts), [src/lib/security/headers.ts](src/lib/security/headers.ts) |
 | CORS explícito por origem | Rotas de API | [src/lib/security/cors.ts](src/lib/security/cors.ts) |
 | Autenticação por JWT | Sessão Supabase Auth, verificada no servidor a cada pedido | [src/lib/auth/session.ts](src/lib/auth/session.ts) |
 | Autorização por papel (client/dev/admin) | `requireRole()` nas rotas sensíveis + regras em `core/services` | [src/lib/auth/session.ts](src/lib/auth/session.ts), [src/core/services/ticketService.ts](src/core/services/ticketService.ts) |

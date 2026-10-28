@@ -6,11 +6,11 @@ export default async function PaginaLogin({
 }: {
   searchParams: Promise<{ redirectTo?: string }>;
 }) {
-  // Força renderização dinâmica (por pedido): o CSP em middleware.ts usa um
+  // Força renderização dinâmica (por pedido): o CSP em proxy.ts usa um
   // nonce novo a cada pedido, e o Next só consegue aplicá-lo aos scripts que
   // gera quando a página é renderizada dinamicamente — pré-gerada em build
   // não tem pedido/nonce nenhum disponível, e os scripts ficavam bloqueados
-  // pelo próprio CSP (ver comentário em middleware.ts).
+  // pelo próprio CSP (ver comentário em proxy.ts).
   await connection();
 
   const { redirectTo } = await searchParams;

@@ -6,7 +6,7 @@ import type { CookieOptions } from "@supabase/ssr";
  * DEFAULT_COOKIE_OPTIONS — confirmado no código instalado) — para o caso de
  * o cliente de browser precisar de os ler via document.cookie. Esta app
  * nunca faz isso, a sessão só é lida no servidor (ver
- * src/lib/supabase/server.ts e middleware.ts). Reforçamos aqui: "httpOnly"
+ * src/lib/supabase/server.ts e proxy.ts). Reforçamos aqui: "httpOnly"
  * bloqueia leitura por JavaScript no browser (mitiga roubo de sessão via
  * XSS) sem quebrar nada, e "secure" impede o cookie de ser enviado fora de
  * HTTPS. Mesmo padrão usado em gestor_financeiro/gestor_investimento.

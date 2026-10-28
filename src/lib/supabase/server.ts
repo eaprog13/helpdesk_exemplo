@@ -26,7 +26,7 @@ export async function criarClienteServidor() {
             armazemCookies.set({ name: nome, value: valor, ...comSegurancaReforcada(opcoes) });
           } catch {
             // set() chamado a partir de um Server Component: ignorável,
-            // o middleware trata da renovação de sessão nesse caso.
+            // o proxy (proxy.ts) trata da renovação de sessão nesse caso.
           }
         },
         remove(nome: string, opcoes: CookieOptions) {

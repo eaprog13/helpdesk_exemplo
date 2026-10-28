@@ -3,7 +3,7 @@ import { FormularioAlterarPassword } from "@/components/auth/ChangePasswordForm"
 
 export default async function PaginaAlterarPalavraPasse() {
   // Ver comentário equivalente em src/app/login/page.tsx: força renderização
-  // dinâmica para que o nonce do CSP (middleware.ts) chegue aos scripts
+  // dinâmica para que o nonce do CSP (proxy.ts) chegue aos scripts
   // desta página. Página dividida em servidor (aqui) + cliente
   // (ChangePasswordForm.tsx) porque "use client" na própria página impede
   // usar connection(), que só corre em Server Components.

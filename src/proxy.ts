@@ -17,7 +17,7 @@ function ehCaminhoPublico(caminho: string) {
   );
 }
 
-export async function middleware(pedido: NextRequest) {
+export async function proxy(pedido: NextRequest) {
   const nonce = crypto.randomUUID();
   const cabecalhosSeguranca = construirCabecalhosSeguranca(nonce);
 
@@ -124,7 +124,7 @@ export const config = {
        * HTML, não a imagem), partindo o logótipo em todo o lado onde
        * aparecia antes de autenticar (ex.: a própria página de login).
        * Confirmado só em produção (`next start`) — em `next dev`/Turbopack
-       * os assets de public/ não passavam pelo middleware, por isso nunca
+       * os assets de public/ não passavam pelo proxy, por isso nunca
        * se via o problema em desenvolvimento.
        */
       source:
