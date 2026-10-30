@@ -29,7 +29,7 @@ export async function POST(pedido: Request) {
     if (!dadosValidados.success) {
       return comCors(
         pedido,
-        NextResponse.json({ error: dadosValidados.error.errors[0]?.message }, { status: 400 })
+        NextResponse.json({ error: dadosValidados.error.issues[0]?.message }, { status: 400 })
       );
     }
 

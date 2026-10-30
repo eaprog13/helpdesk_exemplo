@@ -53,12 +53,12 @@ function construirFornecedorLlm(): FornecedorLlm {
       // completamente diferente e não implementado aqui).
       return new FornecedorLlmGemini(
         process.env.GEMINI_API_KEY ?? "",
-        process.env.GEMINI_MODEL ?? "gemini-1.5-flash"
+        process.env.GEMINI_MODEL ?? "gemini-3.8-flash"
       );
     case "openai":
       return new FornecedorLlmOpenAi(
         process.env.OPENAI_API_KEY ?? "",
-        process.env.OPENAI_MODEL ?? "gpt-4o-mini"
+        process.env.OPENAI_MODEL ?? "gpt-6-luna"
       );
     case "groq":
       // Lista de modelos disponíveis muda com frequência (a Groq
@@ -75,7 +75,7 @@ function construirFornecedorLlm(): FornecedorLlm {
     default:
       return new FornecedorLlmAnthropic(
         process.env.ANTHROPIC_API_KEY ?? "",
-        process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-5"
+        process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5-5"
       );
   }
 }

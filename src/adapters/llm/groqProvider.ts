@@ -15,6 +15,10 @@ import {
 // https://console.groq.com/docs/openai — "OpenAI Compatibility".
 const URL_BASE_GROQ = "https://api.groq.com/openai/v1";
 
+// max_completion_tokens substitui o max_tokens (que os modelos de raciocínio
+// recusam) e conta também os tokens de raciocínio: daí a folga no limite.
+const MAXIMO_TOKENS = 4096;
+
 export class FornecedorLlmGroq implements FornecedorLlm {
   private cliente: OpenAI | null = null;
 
@@ -30,7 +34,7 @@ export class FornecedorLlmGroq implements FornecedorLlm {
     const cliente = this.obterCliente();
     const conclusao = await cliente.chat.completions.create({
       model: this.modelo,
-      max_tokens: 1024,
+      max_completion_tokens: MAXIMO_TOKENS,
       messages: [
         { role: "system", content: PROMPT_SISTEMA },
         { role: "user", content: construirPromptUtilizador(pedido) },
@@ -46,7 +50,7 @@ export class FornecedorLlmGroq implements FornecedorLlm {
     const cliente = this.obterCliente();
     const conclusao = await cliente.chat.completions.create({
       model: this.modelo,
-      max_tokens: 1024,
+      max_completion_tokens: MAXIMO_TOKENS,
       messages: [
         { role: "system", content: PROMPT_SISTEMA_HUMANIZACAO },
         { role: "user", content: construirPromptUtilizadorHumanizacao(pedido) },
