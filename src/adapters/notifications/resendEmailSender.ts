@@ -3,6 +3,18 @@ import { Resend } from "resend";
 import type { RemetenteEmail, ResultadoEnvio } from "@/core/ports/notifications";
 import type { Ticket } from "@/core/types";
 
+// Nomes, perguntas e notas vêm de quem usa a aplicação: escapam-se antes de
+// entrar no HTML do email, senão um cliente podia meter links ou HTML num
+// email enviado em nome da empresa.
+function escaparHtml(texto: string) {
+  return texto
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function envolverHtml(titulo: string, corpoHtml: string) {
   // Cores de marca da Vértice Digital aplicadas também nos emails transacionais.
   return `
@@ -66,10 +78,10 @@ export class RemetenteEmailResend implements RemetenteEmail {
 
     const html = envolverHtml(
       "As suas credenciais de acesso",
-      `<p>Olá ${nomeCompleto},</p>
+      `<p>Olá ${escaparHtml(nomeCompleto)},</p>
        <p>Foi criada uma conta para si no centro de apoio ao cliente da Vértice Digital.</p>
-       <p><strong>Email:</strong> ${destinatario}<br/>
-          <strong>Password temporária:</strong> ${palavraPasseTemporaria}</p>
+       <p><strong>Email:</strong> ${escaparHtml(destinatario)}<br/>
+          <strong>Password temporária:</strong> ${escaparHtml(palavraPasseTemporaria)}</p>
        <p>Por segurança, ser-lhe-á pedido para definir uma nova password no primeiro acesso.</p>
        <p><a href="${this.urlApp}/login" style="color:#0F6E8C;">Aceder ao centro de apoio</a></p>`
     );
@@ -87,12 +99,12 @@ export class RemetenteEmailResend implements RemetenteEmail {
 
     const html = envolverHtml(
       "Registámos o seu pedido",
-      `<p>Olá ${nomeCompleto},</p>
+      `<p>Olá ${escaparHtml(nomeCompleto)},</p>
        <p>A sua questão foi encaminhada para a nossa equipa técnica (ticket <strong>#${ticket.id.slice(
          0,
          8
        )}</strong>) porque não tínhamos uma resposta imediata na nossa base de conhecimento.</p>
-       <p><em>"${ticket.question}"</em></p>
+       <p><em>"${escaparHtml(ticket.question)}"</em></p>
        <p>Vamos analisar o seu caso e voltamos a contactá-lo brevemente.</p>
        <p><a href="${this.urlApp}/tickets/${ticket.id}" style="color:#0F6E8C;">Acompanhar o pedido</a></p>`
     );
@@ -102,7 +114,7 @@ export class RemetenteEmailResend implements RemetenteEmail {
   async enviarTicketAssumido(destinatario: string, nomeCompleto: string, ticket: Ticket): Promise<ResultadoEnvio> {
     const html = envolverHtml(
       "O seu pedido está a ser tratado",
-      `<p>Olá ${nomeCompleto},</p>
+      `<p>Olá ${escaparHtml(nomeCompleto)},</p>
        <p>O seu pedido (ticket <strong>#${ticket.id.slice(
          0,
          8
@@ -121,9 +133,9 @@ export class RemetenteEmailResend implements RemetenteEmail {
   ): Promise<ResultadoEnvio> {
     const html = envolverHtml(
       "O seu pedido foi resolvido",
-      `<p>Olá ${nomeCompleto},</p>
+      `<p>Olá ${escaparHtml(nomeCompleto)},</p>
        <p>O ticket <strong>#${ticket.id.slice(0, 8)}</strong> foi marcado como resolvido:</p>
-       <p>${notaResolucao}</p>
+       <p>${escaparHtml(notaResolucao)}</p>
        <p><a href="${this.urlApp}/tickets/${ticket.id}" style="color:#0F6E8C;">Ver detalhes</a></p>`
     );
     return this.enviar(destinatario, `Pedido resolvido — ticket #${ticket.id.slice(0, 8)}`, html);
